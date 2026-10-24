@@ -11,6 +11,7 @@ import { SqlBlock } from "@/components/proofsql/ProofCard";
 import { runModeOf } from "@/lib/proofsql/readiness";
 import { COVID_CASES, runCovidEvaluation } from "@/lib/proofsql/covidEvaluation";
 import { analyzeCovidQuestion } from "@/lib/model.functions";
+import { processingStatus } from "@/lib/proofsql/presentation";
 
 export const Route = createFileRoute("/evaluation")({
   head: () => ({
@@ -48,7 +49,7 @@ function EvalPage() {
         ? await runCovidEvaluation({ db: activeDb, countries, mode, modelStatus: modelStatusLabel, livePlanner: mode === "live" && planner.eligibleForLive ? (question) => analyzeCovidQuestion({ data: { question } }) : undefined })
         : await runEvaluation({ db: activeDb, contract: useBaseline ? DEFAULT_CONTRACT() : contract, mode, modelName: planner.model ?? "unknown", modelStatus: modelStatusLabel, livePlanner }));
       setRanAt(new Date().toISOString());
-      setRanWith({ mode, label: modelStatusLabel });
+      setRanWith({ mode, label: processingStatus(mode, planner) });
     } finally { setBusy(false); }
   };
   const resetAndRun = async () => {
@@ -85,7 +86,7 @@ function EvalPage() {
 
       {res && (
         <>
-          <details className="text-xs text-muted-foreground"><summary className="cursor-pointer">Technical run details</summary><div><span className="font-semibold text-foreground">{runKind}</span> · Live inference used in {liveUsed.length}/{res.length} cases{liveUsed.length ? ` (${liveUsed.join(", ")})` : ""} · Status at run: {ranWith?.label} · Model: <span className="font-mono">{fullyLive || liveUsed.length ? res.find((o) => o.run.liveInference)?.run.modelName : "none (scripted)"}</span> · Run at {ranAt && new Date(ranAt).toLocaleString()} · Average latency {Math.round(res.reduce((a, o) => a + o.ms, 0) / res.length)} ms</div></details>
+          <details className="text-xs text-muted-foreground"><summary className="cursor-pointer">Technical run details</summary><div><span className="font-semibold text-foreground">{runKind}</span> · Live inference used in {liveUsed.length}/{res.length} cases{liveUsed.length ? ` (${liveUsed.join(", ")})` : ""} · Status at run: {ranWith?.label} · Run at {ranAt && new Date(ranAt).toLocaleString()} · Average latency {Math.round(res.reduce((a, o) => a + o.ms, 0) / res.length)} ms</div></details>
           {targetMet
             ? <p className="rounded border border-success bg-success-soft p-2 text-xs text-success">All {res.length} checks passed. These results were measured against the selected data.</p>
             : <p className="rounded border border-destructive bg-destructive-soft p-2 text-xs text-destructive">{failed.length} case(s) failed: {failed.map((o) => o.c.id).join(", ")}. See highlighted rows below.</p>}
@@ -106,7 +107,7 @@ function EvalPage() {
 
       <details><summary className="cursor-pointer py-3 font-medium">Detailed checks &amp; processing evidence</summary><div className="overflow-auto rounded-lg border border-border bg-card">
         <table className="w-full text-xs">
-          <thead className="bg-muted"><tr>{["ID", "Category", "Question", "Expected", "Actual", "Decision", "Semantic answer", "Warnings", "Join radar", "Join status", "Security", "Inference used", "Mode", "Provider", "Model", "Error code", "Overall", "ms"].map((h) => <th key={h} className="px-2 py-1.5 text-left font-medium">{h}</th>)}</tr></thead>
+          <thead className="bg-muted"><tr>{["ID", "Category", "Question", "Expected", "Actual", "Decision", "Semantic answer", "Warnings", "Join radar", "Join status", "Security", "Inference used", "Mode", "Error code", "Overall", "ms"].map((h) => <th key={h} className="px-2 py-1.5 text-left font-medium">{h}</th>)}</tr></thead>
           <tbody>{cases.map((c) => {
             const o = res?.find((x) => x.c.id === c.id);
             return (
@@ -123,14 +124,12 @@ function EvalPage() {
                   <td className="px-2 py-1.5">{o ? flag(o.securityOk) : "—"}</td>
                   <td className="px-2 py-1.5">{o ? (o.run.liveInference ? "Yes" : "No") : "—"}</td>
                   <td className="px-2 py-1.5">{o ? runModeOf(o.run) : "—"}</td>
-                  <td className="px-2 py-1.5">{o ? (o.run.liveInference ? planner.provider ?? "unknown" : "—") : "—"}</td>
-                  <td className="px-2 py-1.5 font-mono">{o ? (o.run.liveInference ? o.run.modelName : "—") : "—"}</td>
                   <td className="px-2 py-1.5 font-mono">{o?.run.errorCode ?? "—"}</td>
                   <td className="px-2 py-1.5">{o ? <CheckBadge state={o.passed ? "PASS" : "FAIL"} /> : "—"}</td>
                   <td className="px-2 py-1.5 font-mono">{o?.ms ?? "—"}</td>
                 </tr>
                 {(c.reference || c.expectedWarnings) && (
-                  <tr className="border-t border-border/50"><td colSpan={18} className="px-2 pb-2">
+                  <tr className="border-t border-border/50"><td colSpan={16} className="px-2 pb-2">
                     <details>
                       <summary className="cursor-pointer text-[11px] text-muted-foreground">Debugging trace{c.expectedWarnings ? ` · expected warnings: ${c.expectedWarnings.join(", ")}` : ""}</summary>
                       {c.reference && <div className="mt-1"><p className="mb-1 text-[11px] text-muted-foreground">Reference SQL (debugging only — correctness compares normalized result rows on columns {c.compare?.join(", ")}):</p><SqlBlock sql={c.reference} /></div>}
