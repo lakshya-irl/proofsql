@@ -89,7 +89,7 @@ export function ProofCard({ run }: { run: RunResult }) {
         <p><span className="text-muted-foreground">Resolved:</span> {run.resolvedQuestion}</p>
       </Section>
       <Section title="Provenance">
-        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
+        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs [&_dd]:break-words">
           <dt className="text-muted-foreground">Dataset</dt><dd>{run.datasetName}</dd>
           <dt className="text-muted-foreground">Snapshot</dt><dd className="font-mono">{run.snapshotId}</dd>
           <dt className="text-muted-foreground">Planner</dt><dd>{run.plannerLabel}</dd>
