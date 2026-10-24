@@ -6,4 +6,4 @@
 - [ ] Verify authenticated role flow — blocked: no auth account or assigned role exists.
 - [ ] Confirm arbitrary renamed-table mappings — blocked: needs actual education schema and metric definitions.
 - [ ] Integrate the owner's education dataset — blocked: no education data file supplied.
-- [ ] Verify tests and update chat.md.
+- [x] Verify tests and update chat.md.
