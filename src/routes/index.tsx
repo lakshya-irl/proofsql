@@ -5,7 +5,7 @@ import { useApp } from "@/components/proofsql/AppProvider";
 import { SchemaPanel } from "@/components/proofsql/SchemaPanel";
 import { ProofCard, ResultTable } from "@/components/proofsql/ProofCard";
 import { JoinRadarPanel } from "@/components/proofsql/JoinRadarPanel";
-import { DecisionBadge, JoinBadge, ModeBadge } from "@/components/proofsql/badges";
+import { DecisionBadge, JoinBadge } from "@/components/proofsql/badges";
 import { PrepareDemoButton, ReadinessList } from "@/components/proofsql/PrepareDemo";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,7 +33,7 @@ export const Route = createFileRoute("/")({
 });
 
 function AskPage() {
-  const { ask, db, mode, livePlanner, modelStatusLabel, planner, checking, dataset, covidDb, askCovid } = useApp();
+  const { ask, db, mode, livePlanner, dataset, covidDb, askCovid } = useApp();
   const [q, setQ] = useState("");
   const [run, setRun] = useState<RunResult | null>(null);
   const [busy, setBusy] = useState(false);
@@ -127,7 +127,7 @@ function Outcome({ run, onAsk }: { run: RunResult; onAsk: (q: string) => void })
         {run.datasetName.includes("COVID") && <p className="mt-3 text-xs text-muted-foreground">Source: Johns Hopkins CSSE. Historical reported totals, not current figures.</p>}
         {run.evidence.filter((e) => e.state === "WARNING").map((e, i) => <p key={i} className="mt-2 border-l-2 border-warning pl-3 text-sm text-warning-foreground">{e.detail}</p>)}
         {run.radar && <p className="mt-1 flex flex-wrap items-center gap-1 text-xs">Join radar: <JoinBadge status={run.radar.status} />{run.joinStatus && run.joinStatus !== run.radar.status && <JoinBadge status={run.joinStatus} />}</p>}
-        {isAnswer(run.decision) && <p className="mt-1 text-xs">Confidence: <span className="font-medium">{run.confidence.level}</span> — {run.confidence.reasons[0]}</p>}
+        {isAnswer(run.decision) && <details className="mt-3 text-xs text-muted-foreground"><summary className="cursor-pointer">Answer confidence: {run.confidence.level}</summary><p className="mt-2">{run.confidence.reasons[0]}</p></details>}
         {run.decision === "CLARIFY" && (
           <div className="mt-3 space-y-2">
             <ul className="space-y-1">{run.clarifications.map((c) => <li key={c} className="flex gap-2 text-sm"><CircleHelp className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />{c}</li>)}</ul>
