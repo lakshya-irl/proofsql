@@ -1,4 +1,4 @@
-import { test, expect } from "bun:test";
+import { test, expect } from "vitest";
 import initSqlJs from "sql.js";
 import { csvToDb, kindOf, parseCsv, profileDb } from "./uploads";
 
