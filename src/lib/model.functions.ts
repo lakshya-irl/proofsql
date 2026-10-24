@@ -39,6 +39,14 @@ export const getModelStatus = createServerFn({ method: "GET" }).handler(async ()
     const res = await fetch(`${c.baseUrl}/models`, { headers: authHeaders(c.apiKey), signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS) });
     const latencyMs = Date.now() - t0;
     if (!res.ok) return { ...base, latencyMs, error: `Endpoint responded HTTP ${res.status}.` };
+    // The endpoint answering is not enough: the configured model must be on its list.
+    try {
+      const body = (await res.json()) as { data?: { id?: string }[] };
+      const ids = (body.data ?? []).map((m) => (m.id ?? "").toLowerCase());
+      if (ids.length && !ids.includes(c.modelName.toLowerCase())) {
+        return { ...base, latencyMs, error: `Endpoint is reachable but does not offer model "${c.modelName}". Check MODEL_NAME.` };
+      }
+    } catch { /* non-JSON model list: fall through to reachable */ }
     return { ...base, latencyMs, reachable: true };
   } catch (e) {
     const timedOut = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
