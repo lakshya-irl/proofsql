@@ -109,7 +109,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const livePlanner = liveReady ? async (req: LiveRequest) => analyzeQuestion({ data: req }) : undefined;
   const modelStatusLabel = mode === "scripted"
     ? "Scripted planner — no live model inference"
-    : liveReady ? `Live · ${model!.modelName} (≤${model!.maxParams})` : "Model endpoint not connected";
+    : liveReady ? `Live · ${model!.modelName}${/^\d/.test(model!.maxParams) ? ` (≤${model!.maxParams})` : ""}` : "Model endpoint not connected";
 
   const ask = async (q: string) => {
     if (!db) throw new Error("Database not loaded");

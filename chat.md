@@ -86,3 +86,8 @@ _Last updated: 2026-10-24_
 - Checked: `src/App.tsx` does not exist here. The available build/runtime log files showed no reported error; this specific error remains unverified without the source and complete diagnostic.
 - Guidance: obtain the API base address, private key and exact served model ID from a host offering an eligible model; obtain parameter size from the model's official documentation. Verify support for both model-list and chat-completion endpoints before paying. Do not paste a private key into chat.
 - No provider selected or credential requested. Only chat.md changed; live configuration is still pending.
+
+## 2026-10-24 — Live mode switched to Lovable AI
+- Owner (Rishi) dropped the 8B limit: no ≤8B host worked (OpenRouter 429, HF 402, Groq allam bad JSON, Google gemma-3-4b removed).
+- Lovable Cloud enabled. Live mode now uses google/gemini-3-flash-preview via Lovable AI; tested: real question answered (5 rows, join SAFE, 1.7 s).
+- The UI shows the real model name. Declined the request to label it as Qwen (that would misstate the model).
