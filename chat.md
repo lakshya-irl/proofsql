@@ -72,3 +72,11 @@ _Last updated: 2026-10-24_
 ## Decisions log
 - 2026-10-24: chat.md established as central project memory.
 - 2026-10-24: Built ProofSQL v1 with an in-browser database and scripted mode as default; live mode activates only when a reachable ≤8B model endpoint is configured.
+
+## Update 2026-10-24 — guidance on closing remaining limitations
+- Request: explain live-model setup, recovery of older saved runs, query cancellation, and the reported `src/pages/Index.tsx(18,11)` overload error.
+- Verified: this project has `src/routes/index.tsx`, not `src/pages/Index.tsx`; the supplied partial overload error cannot be reproduced from that path. All 17 existing tests pass.
+- Guidance: configure an HTTPS OpenAI-compatible endpoint for a verified open-weight model of 8B parameters or fewer; keep its key server-side; run Settings health check, then test real live questions and the evaluation suite. A model-list health check alone does not verify inference.
+- Older runs are ignored by the current storage version, not necessarily deleted. Recovery depends on old browser storage or exported backups still being available; inspect before resetting or clearing anything.
+- Query cancellation remains unimplemented: synchronous browser SQLite needs an isolated Web Worker with termination and database reconstruction for a real execution deadline. The existing 8-second health and 45-second model-request limits do not limit SQL execution.
+- Files modified for this guidance task: chat.md only. No app behavior changed; model credentials, live verification, old-run recovery and query cancellation remain outstanding.
