@@ -2,13 +2,22 @@
 import type { Database, SqlValue } from "sql.js";
 import { runQuery } from "./db";
 import { checkSql, type Check } from "./firewall";
-import { joinRadar, type RadarResult } from "./joinRadar";
-import { PlanSchema, guard, scriptedPlan, type Plan, type ScriptedCase, type Suggestion } from "./planner";
+import { joinRadar, type JoinStatus, type RadarResult } from "./joinRadar";
+import { PlanSchema, SCRIPTED_UNSUPPORTED, guard, scriptedPlan, type Plan, type ScriptedCase, type Suggestion } from "./planner";
 import { current, type Contract, type DefKey, type DefVersion } from "./contract";
 import { DATASET_NAME, SNAPSHOT_ID, YEAR_RULES, allColumns, tableNames } from "./schema";
 
-export type Decision = "ANSWER" | "CLARIFY" | "ABSTAIN" | "BLOCKED" | "ERROR";
+export type Decision = "ANSWER" | "ANSWER_WITH_WARNING" | "CLARIFY" | "ABSTAIN" | "BLOCKED" | "ERROR";
 export type Mode = "scripted" | "live";
+export const isAnswer = (d: Decision) => d === "ANSWER" || d === "ANSWER_WITH_WARNING";
+
+/** Payload sent to the server-side analyze-question function. Contains no secrets. */
+export type LiveRequest = {
+  question: string; mode: Mode; profile: string; schema: string;
+  definitions: { title: string; version: number; meaning: string; expression: string; grain: string }[];
+  candidates: Record<string, string[]>;
+};
+export type LiveResponse = { content: string; latencyMs: number; modelName: string };
 export type Evidence = { label: string; state: "PASS" | "WARNING"; detail: string };
 export type Repaired = {
   riskySql: string; repairedSql: string; explanation: string;
@@ -28,6 +37,7 @@ export type RunResult = {
   result: { columns: string[]; rows: Record<string, SqlValue>[]; truncated: boolean } | null;
   executionMs: number | null; confidence: { level: "High confidence" | "Review required" | "Insufficient evidence" | "Not applicable"; reasons: string[] };
   limitations: string[]; summary: string; error: string | null;
+  joinStatus: JoinStatus | null; liveInference: boolean; modelLatencyMs: number | null; latencyMs: number | null;
 };
 
 export const ROW_LIMIT = 200;
@@ -35,7 +45,7 @@ export const ROW_LIMIT = 200;
 export type PipelineInput = {
   question: string; mode: Mode; contract: Contract; db: Database;
   modelName: string; modelStatus: string;
-  livePlanner?: ((question: string) => Promise<string>) | undefined;
+  livePlanner?: ((req: LiveRequest) => Promise<LiveResponse>) | undefined;
 };
 
 const uid = () => `run_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
@@ -58,17 +68,38 @@ function defsFor(plan: Plan, declared: DefKey[] | null): DefKey[] {
   return out;
 }
 
-const LIVE_PROMPT = (q: string) => `You are a SQL planner for a SQLite database. Return ONLY a JSON object with keys:
-decision ("answer"|"clarify"|"abstain"|"blocked"), resolved_question, metric, grain, time_interpretation, tables (array), columns (array), joins (array), sql (string or null, single SELECT/WITH using ? placeholders), params (array), clarifications (array), assumptions (array), abstain_reason, recommended_fix.
-Schema:
-districts(district_code TEXT, district_name TEXT)
-schools(school_id INTEGER, school_name TEXT, district_code TEXT, school_status TEXT)
-enrolments(enrolment_id INTEGER, school_id INTEGER, student_id TEXT, academic_year TEXT mixed formats like '2023/24','AY2023','2024-25', student_status TEXT, enrolment_count INTEGER)
-payments(payment_id INTEGER, school_id INTEGER, academic_year TEXT, amount REAL, payment_status TEXT)
-Rules: never write data; clarify ambiguous business terms; abstain on forecasting, causation or missing fields; aggregate one-to-many tables before joining them.
-Question: ${q}`;
+function liveRequest(db: Database, question: string, mode: Mode, contract: Contract): LiveRequest {
+  const vals = (sql: string) => runQuery(db, sql).rows.map((r) => String(Object.values(r)[0] ?? "NULL"));
+  const counts = ["districts", "schools", "enrolments", "payments"].map((t) => `${t}: ${runQuery(db, `SELECT COUNT(*) AS n FROM ${t}`).rows[0]?.["n"]} rows`).join("; ");
+  return {
+    question, mode,
+    profile: `${DATASET_NAME} (${SNAPSHOT_ID}). ${counts}. Known issues: mixed academic-year formats, duplicates, NULL keys, sentinel statuses, one-to-many fan-out between enrolments and payments via schools.`,
+    schema: [
+      "districts(district_code TEXT, district_name TEXT)",
+      "schools(school_id INTEGER, school_name TEXT, district_code TEXT, school_status TEXT)",
+      "enrolments(enrolment_id INTEGER, school_id INTEGER, student_id TEXT, academic_year TEXT, student_status TEXT, enrolment_count INTEGER)",
+      "payments(payment_id INTEGER, school_id INTEGER, academic_year TEXT, amount REAL, payment_status TEXT)",
+    ].join("\n"),
+    definitions: (["enrolment", "payment_total", "academic_year"] as DefKey[]).map((k) => current(contract, k)).filter((d) => d.status === "APPROVED")
+      .map((d) => ({ title: d.title, version: d.version, meaning: d.meaning, expression: d.expression, grain: d.grain })),
+    candidates: {
+      district_code: vals("SELECT DISTINCT district_code FROM districts"),
+      district_name: vals("SELECT DISTINCT district_name FROM districts"),
+      student_status: vals("SELECT DISTINCT student_status FROM enrolments"),
+      payment_status: vals("SELECT DISTINCT payment_status FROM payments"),
+      academic_year: vals("SELECT DISTINCT academic_year FROM enrolments"),
+    },
+  };
+}
 
 export async function runPipeline(input: PipelineInput): Promise<RunResult> {
+  const t0 = performance.now();
+  const r = await runInner(input);
+  r.latencyMs = Math.round(performance.now() - t0);
+  return r;
+}
+
+async function runInner(input: PipelineInput): Promise<RunResult> {
   const { question, mode, contract, db } = input;
   const r: RunResult = {
     id: uid(), timestamp: new Date().toISOString(), question, resolvedQuestion: question, decision: "ERROR",
@@ -84,6 +115,7 @@ export async function runPipeline(input: PipelineInput): Promise<RunResult> {
       "Correlation in historical records is not causation.",
     ],
     summary: "", error: null,
+    joinStatus: null, liveInference: false, modelLatencyMs: null, latencyMs: null,
   };
   const checks = r.checks;
 
@@ -95,8 +127,8 @@ export async function runPipeline(input: PipelineInput): Promise<RunResult> {
       sc = scriptedPlan(question);
       if (!sc) {
         r.decision = "ABSTAIN";
-        r.reason = "The scripted planner supports only the predefined demo questions. Connect an open-weight model endpoint in Settings for arbitrary questions.";
-        r.summary = "Not a supported scripted demo question.";
+        r.reason = SCRIPTED_UNSUPPORTED;
+        r.summary = SCRIPTED_UNSUPPORTED;
         checks.push({ name: "Planner", state: "NOT CHECKED", detail: "No scripted plan exists for this question; nothing was executed." });
         return r;
       }
@@ -108,9 +140,13 @@ export async function runPipeline(input: PipelineInput): Promise<RunResult> {
         r.plannerLabel += " (deterministic guard applied before model)";
       } else {
         if (!input.livePlanner) throw new Error("Model endpoint not connected.");
-        const raw = await input.livePlanner(LIVE_PROMPT(question));
-        const json = raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1);
-        const parsed = PlanSchema.safeParse(JSON.parse(json));
+        const resp = await input.livePlanner(liveRequest(db, question, mode, contract));
+        r.liveInference = true; r.modelLatencyMs = resp.latencyMs; r.modelName = resp.modelName;
+        r.plannerLabel = `Live model inference: ${resp.modelName} (${resp.latencyMs} ms)`;
+        const raw = resp.content;
+        let obj: unknown = null;
+        try { obj = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1)); } catch { /* handled below */ }
+        const parsed = PlanSchema.safeParse(obj);
         if (!parsed.success) {
           checks.push({ name: "Plan schema valid", state: "FAIL", detail: parsed.error.issues.slice(0, 3).map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") });
           r.decision = "ERROR"; r.error = "Model returned a plan that failed schema validation."; return r;
@@ -141,9 +177,11 @@ export async function runPipeline(input: PipelineInput): Promise<RunResult> {
     }
     r.decision = "CLARIFY";
     r.clarifications = [`I found ${m.length} possible interpretations of "${sc.grounding}". Which should I use?`];
+    r.clarifications = [`I found multiple possible matches for "${sc.grounding}": ${m.map((x, i) => `${i + 1}. ${x["district_code"]}${x["district_name"] !== x["district_code"] ? ` (${x["district_name"]})` : ""}`).join("  ")}. Choose one or select all.`];
     r.suggestions = m.map((x) => ({ label: `${x["district_name"]} (code ${x["district_code"]}) — ${x["match"]}`, question: `Show schools in district code ${x["district_code"]}` }));
+    if (m.length > 1) r.suggestions.push({ label: `All ${m.length} ${sc.grounding.replace(/^./, (ch) => ch.toUpperCase())}-related districts (${m.map((x) => x["district_code"]).join(", ")})`, question: `Show schools in district codes ${m.map((x) => x["district_code"]).join(" ")}` });
     r.evidence.push({ label: "Value grounding", state: "WARNING", detail: `Searched districts for "${sc.grounding}": ${m.map((x) => x["district_code"]).join(", ")}.` });
-    r.summary = r.clarifications[0]!;
+    r.summary = `Multiple possible matches for "${sc.grounding}" — choose before any SQL runs.`;
     return r;
   }
 
@@ -172,18 +210,19 @@ export async function runPipeline(input: PipelineInput): Promise<RunResult> {
 
     // 5. Join Safety Radar
     let radar = joinRadar(fw.ast, fw.ctes);
-    r.radar = radar;
+    r.radar = radar; r.joinStatus = radar.status;
     let execSql = plan.sql; let execParams = plan.params;
     if (radar.state === "FAIL") {
-      checks.push({ name: "Join safety (original SQL)", state: "FAIL", detail: radar.title });
+      checks.push({ name: "Join risk detection", state: "PASS", detail: `RISK_DETECTED — ${radar.title}` });
       if (!sc?.repair) {
+        r.joinStatus = "REPAIR_AVAILABLE";
         r.decision = "ABSTAIN"; r.reason = "The query joins two one-to-many tables before aggregation, so totals would be inflated.";
         r.recommendedFix = "Aggregate each child table to the school grain first, then join the summaries."; r.summary = r.reason;
         r.confidence = { level: "Insufficient evidence", reasons: [radar.explanation] }; return r;
       }
       const fw2 = checkSql(sc.repair.sql);
       const radar2 = fw2.allowed ? joinRadar(fw2.ast, fw2.ctes) : null;
-      if (!fw2.allowed || radar2?.state !== "PASS") { r.decision = "ERROR"; r.error = "Repaired SQL failed validation."; return r; }
+      if (!fw2.allowed || radar2?.state !== "PASS") { r.joinStatus = "VALIDATION_ERROR"; r.decision = "ERROR"; r.error = "Repaired SQL failed validation."; return r; }
       checks.push({ name: "Repaired SQL firewall + join safety", state: "PASS", detail: "Aggregate-before-join SQL passed firewall and radar." });
       // Measure the fan-out for real
       const sum = (sql: string, cols: string[]) => {
@@ -200,7 +239,7 @@ export async function runPipeline(input: PipelineInput): Promise<RunResult> {
         multiplicity: `Raw join produces ${joined.toLocaleString()} rows from ${enr.toLocaleString()} enrolment rows (≈${enr ? (joined / enr).toFixed(1) : "—"}× multiplication).`,
       };
       r.evidence.push({ label: "Fan-out measured", state: "WARNING", detail: r.repair.multiplicity });
-      execSql = sc.repair.sql; execParams = sc.repair.params; r.sql = execSql; r.params = execParams;
+      execSql = sc.repair.sql; execParams = sc.repair.params; r.sql = execSql; r.params = execParams; r.joinStatus = "REPAIR_APPLIED";
       radar = { ...radar };
     } else {
       checks.push({ name: "Join safety", state: radar.state, detail: `${radar.title}. ${radar.explanation}` });
@@ -227,10 +266,10 @@ export async function runPipeline(input: PipelineInput): Promise<RunResult> {
 
     // 7. Execute (read-only, limited)
     const before = db.getRowsModified();
-    const t0 = performance.now();
+    const tx = performance.now();
     try {
       const out = runQuery(db, `SELECT * FROM (${execSql}) LIMIT ${ROW_LIMIT + 1}`, execParams);
-      r.executionMs = Math.round((performance.now() - t0) * 10) / 10;
+      r.executionMs = Math.round((performance.now() - tx) * 10) / 10;
       const truncated = out.rows.length > ROW_LIMIT;
       r.result = { columns: out.columns, rows: out.rows.slice(0, ROW_LIMIT), truncated };
       checks.push({ name: "SQL executed successfully", state: "PASS", detail: `${r.result.rows.length} rows in ${r.executionMs} ms.` });
@@ -254,9 +293,9 @@ export async function runPipeline(input: PipelineInput): Promise<RunResult> {
     if (!sc?.evidence) checks.push({ name: "Data-quality evidence", state: "NOT CHECKED", detail: "No evidence queries defined for this query shape." });
     checks.push({ name: "Causal interpretation", state: "NOT CHECKED", detail: "Results are descriptive only." });
 
-    r.decision = "ANSWER";
+    r.decision = r.repair ? "ANSWER_WITH_WARNING" : "ANSWER";
     r.summary = sc?.summarize ? sc.summarize(r.result!.rows) : `Query returned ${r.result!.rows.length} rows.`;
-    r.confidence = confidenceOf(checks.filter((c) => !(r.repair && c.name === "Join safety (original SQL)")), r.evidence);
+    r.confidence = confidenceOf(checks, r.evidence);
     return r;
   }
 
