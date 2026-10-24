@@ -53,7 +53,7 @@ function CovidPage() {
       const { question, plan } = interpretModelOutput(r.content, countries);
       show(plan, `Live AI · ${r.modelName} · ${r.latencyMs} ms${question ? ` · read as ${JSON.stringify(question)}` : ""}`);
     } catch (e) {
-      setOut({ plan: { decision: "ABSTAIN", reason: `ERROR — ${e instanceof Error ? e.message : String(e)}.` }, cols: [], rows: [], ms: 0 });
+      setOut({ plan: { decision: "ERROR", reason: `${e instanceof Error ? e.message : String(e)}. Nothing was answered; try again.` }, cols: [], rows: [], ms: 0 });
     } finally { setThinking(false); }
   }
 

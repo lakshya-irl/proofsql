@@ -17,7 +17,7 @@ export type CovidQuestion =
 
 export type CovidPlan =
   | { decision: "ANSWER"; sql: string; params: (string | number)[]; warnings: string[] }
-  | { decision: "ABSTAIN" | "CLARIFY"; reason: string };
+  | { decision: "ABSTAIN" | "CLARIFY" | "ERROR"; reason: string };
 
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 
