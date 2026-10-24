@@ -34,7 +34,7 @@ function CovidPage() {
   const [month, setMonth] = useState("2021-12");
   const [from, setFrom] = useState("2021-01");
   const [n, setN] = useState(10);
-  const [out, setOut] = useState<{ plan: CovidPlan; cols: string[]; rows: unknown[][]; ms: number; via?: string } | null>(null);
+  const [out, setOut] = useState<{ plan: CovidPlan; cols: string[]; rows: unknown[][]; ms: number; via?: string | undefined } | null>(null);
   const [text, setText] = useState("");
   const [thinking, setThinking] = useState(false);
 
