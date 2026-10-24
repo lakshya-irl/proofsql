@@ -34,7 +34,7 @@ export type RunResult = {
   sql: string | null; params: (string | number)[]; tables: string[]; columns: string[]; joins: unknown[];
   assumptions: string[]; clarifications: string[]; suggestions: Suggestion[];
   reason: string | null; recommendedFix: string | null; blockedReasons: string[];
-  definitions: DefVersion[]; normalizationRules: string[];
+  definitions: (Omit<DefVersion, "key"> & { key: string })[]; normalizationRules: string[];
   evidence: Evidence[]; checks: Check[]; radar: RadarResult | null; repair: Repaired | null;
   result: { columns: string[]; rows: Record<string, SqlValue>[]; truncated: boolean } | null;
   executionMs: number | null; confidence: { level: "High confidence" | "Review required" | "Insufficient evidence" | "Not applicable"; reasons: string[] };

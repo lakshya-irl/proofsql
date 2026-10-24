@@ -34,3 +34,8 @@ test("renamed school table clarifies instead of silently inventing a mapping", a
   const r = await runPipeline({ db, contract: DEFAULT_CONTRACT(), mode: "scripted", modelName: "test", modelStatus: "test", question: "Count schools by district" });
   expect(r.decision).toBe("CLARIFY"); expect(r.errorCode).toBe("SCHEMA_CHANGED"); expect(r.result).toBeNull(); expect(r.sql).toBeNull(); db.close();
 });
+test("stopped school execution retains no result and records cancellation", async () => {
+  const db = new (await initSqlJs()).Database(); db.exec(buildFixtureSql());
+  const r = await runPipeline({ db, contract: DEFAULT_CONTRACT(), mode: "scripted", modelName: "test", modelStatus: "test", question: "Count schools by district", execute: async () => { throw new Error("QUERY_CANCELLED"); } });
+  expect(r.errorCode).toBe("QUERY_CANCELLED"); expect(r.decision).toBe("ERROR"); expect(r.result).toBeNull(); db.close();
+});

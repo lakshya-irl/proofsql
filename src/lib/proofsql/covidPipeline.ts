@@ -67,6 +67,8 @@ async function applyPlan(r: RunResult, plan: CovidPlan, q: CovidQuestion | null,
   r.tables = fw.tables; r.columns = fw.columns;
   if (!fw.allowed) { r.decision = "ERROR"; r.errorCode = "SQL_AST_REJECTED"; r.error = `Compiled SQL was rejected: ${fw.reasons.join(" ")} Nothing was executed.`; r.summary = r.error; return r; }
   r.sql = plan.sql; r.params = plan.params;
+  const duplicates = Number(db.exec("SELECT COUNT(*) FROM (SELECT country, month FROM covid_monthly GROUP BY country, month HAVING COUNT(*) > 1)")[0]?.values[0]?.[0] ?? 0);
+  if (duplicates) { r.decision = "ERROR"; r.errorCode = "JOIN_CHECK_FAILED"; r.result = null; r.sql = null; r.error = "Duplicate country-month keys invalidate this query; nothing executed."; r.summary = r.error; r.checks.push({ name: "Join safety", state: "FAIL", detail: `${duplicates} duplicate keys.` }); return r; }
   const t = performance.now();
   if (i.signal?.aborted) throw new Error("QUERY_CANCELLED");
   const out = i.execute ? await i.execute(plan.sql, plan.params) : db.exec(plan.sql, plan.params)[0];
@@ -74,14 +76,14 @@ async function applyPlan(r: RunResult, plan: CovidPlan, q: CovidQuestion | null,
   const columns = out?.columns ?? [];
   const all = (out?.values ?? []).map((v) => Object.fromEntries(columns.map((c, k) => [c, v[k] as SqlValue])));
   r.result = { columns, rows: all.slice(0, ROW_LIMIT), truncated: all.length > ROW_LIMIT };
-  const duplicates = Number(db.exec("SELECT COUNT(*) FROM (SELECT country, month FROM covid_monthly GROUP BY country, month HAVING COUNT(*) > 1)")[0]?.values[0]?.[0] ?? 0);
   const checks: Check[] = [{ name: "Row limit", state: "PASS", detail: `≤ ${ROW_LIMIT} rows returned.` },
     { name: "Join safety", state: duplicates ? "FAIL" : "PASS", detail: duplicates ? `${duplicates} duplicate keys; result withheld.` : q?.kind === "change" ? "Measured country-month uniqueness; 1:1 self-join." : "No joins; country-month key measured unique." },
     { name: "Query timeout", state: i.execute ? "PASS" : "NOT CHECKED", detail: i.execute ? "Completed within the isolated execution deadline." : "Synchronous execution; stopping not checked." }];
   r.checks.push(...checks);
   if (duplicates) { r.decision = "ERROR"; r.errorCode = "JOIN_CHECK_FAILED"; r.result = null; r.error = "Duplicate country-month keys invalidate this query."; r.summary = r.error; return r; }
   r.joinStatus = "SAFE";
-  r.definitions = COVID_DEFINITIONS.map((d) => ({ ...d, key: d.key === "change" ? "payment_total" : "enrolment", version: 1, status: "APPROVED", sourceColumns: ["covid_monthly.country", "covid_monthly.month", `covid_monthly.${q?.metric ?? "confirmed"}`], nullPolicy: "Missing is not zero.", duplicatePolicy: "Country-month keys must be unique.", updatedAt: "2022-04-16T00:00:00.000Z" }));
+  r.definitions = COVID_DEFINITIONS.map((d) => ({ ...d, version: 1, status: "APPROVED", sourceColumns: ["covid_monthly.country", "covid_monthly.month", `covid_monthly.${q?.metric ?? "confirmed"}`], nullPolicy: "Missing is not zero.", duplicatePolicy: "Country-month keys must be unique.", updatedAt: "1970-01-01T00:00:00.000Z" }));
+  if (i.execute) r.limitations = [`Source: ${COVID_SOURCE}`, "Stopping terminates final SQL execution; it does not cancel an already sent model request."];
   const missing = all.some((row) => Object.values(row).some((v) => v === null));
   const ev: Evidence[] = plan.warnings.map((w) => ({ label: "Data note", state: "WARNING", detail: w }));
   if (missing) ev.push({ label: "Missing values", state: "WARNING", detail: "Some values are missing and are shown as missing, not zero." });
