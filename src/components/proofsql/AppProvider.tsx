@@ -20,7 +20,7 @@ const LS = { contract: "proofsql.contract.v1", runs: "proofsql.runs.v1", mode: "
 
 async function createDb(): Promise<Database> {
   const initSqlJs = (await import("sql.js")).default;
-  const SQL = await initSqlJs({ locateFile: () => "/wasm/sql-wasm.wasm" });
+  const SQL = await initSqlJs({ locateFile: (file: string) => `/wasm/${file}` });
   const db = new SQL.Database();
   db.exec(buildFixtureSql());
   return db;
