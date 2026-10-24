@@ -68,7 +68,6 @@ export function ProofCard({ run, onAsk }: { run: RunResult; onAsk?: (question: s
         <p className="mt-2 font-medium leading-relaxed">{simpleAnswer(run)}</p>
         <details className="mt-3"><summary className="cursor-pointer text-xs text-muted-foreground">Processing details</summary><dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
           <dt>Inference</dt><dd className="text-foreground">{inferenceLabel(run)}</dd>
-          <dt>Model</dt><dd className="truncate font-mono">{run.liveInference ? run.modelName : "none used"}</dd>
           <dt>Snapshot</dt><dd className="font-mono">{run.snapshotId}</dd>
           <dt>Contract</dt><dd>{run.definitions.length ? run.definitions.map((d) => `${d.title} v${d.version}`).join(", ") : "—"}</dd>
           <dt>Time</dt><dd className="font-mono">{run.executionMs != null ? `SQL ${run.executionMs} ms` : "SQL not executed"}{run.latencyMs != null ? ` · total ${run.latencyMs} ms` : ""}</dd>
@@ -89,14 +88,12 @@ export function ProofCard({ run, onAsk }: { run: RunResult; onAsk?: (question: s
         <p><span className="text-muted-foreground">Original:</span> {run.question}</p>
         <p><span className="text-muted-foreground">Resolved:</span> {run.resolvedQuestion}</p>
       </Section>
-      <details><summary className="cursor-pointer border-t border-border py-3 font-medium">Technical evidence &amp; model details</summary><Section title="Provenance">
+      <details><summary className="cursor-pointer border-t border-border py-3 font-medium">Technical evidence</summary><Section title="Provenance">
         <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs [&_dd]:break-words">
           <dt className="text-muted-foreground">Dataset</dt><dd>{run.datasetName}</dd>
           <dt className="text-muted-foreground">Snapshot</dt><dd className="font-mono">{run.snapshotId}</dd>
-          <dt className="text-muted-foreground">Planner</dt><dd>{run.plannerLabel}</dd>
-          <dt className="text-muted-foreground">Model</dt><dd className="font-mono">{run.liveInference ? run.modelName : "none used for this run"}</dd>
+          <dt className="text-muted-foreground">Processing</dt><dd>{inferenceLabel(run)}</dd>
           <dt className="text-muted-foreground">Model mode</dt><dd>{run.mode}{run.liveInference ? " · live inference" : " · no live model inference"}{run.modelLatencyMs != null ? ` · model ${run.modelLatencyMs} ms` : ""}</dd>
-          <dt className="text-muted-foreground">Model status</dt><dd>{run.modelStatus}</dd>
           <dt className="text-muted-foreground">Contract</dt><dd>{run.definitions.length ? run.definitions.map((d) => `${d.title} v${d.version} (${d.status})`).join(", ") : "No governed definition used"}</dd>
           <dt className="text-muted-foreground">Metric</dt><dd>{run.metric ?? "—"}</dd>
           <dt className="text-muted-foreground">Grain</dt><dd>{run.grain ?? "—"}</dd>

@@ -15,7 +15,7 @@
 - The model is called only through server functions in `src/lib/model.functions.ts` so the key stays server-side; never fall back silently to another model.
 - Core rules are covered by `src/lib/proofsql/proofsql.test.ts`; keep it passing.
 - Evaluation correctness compares normalized result rows (reference SQL is only a trace); summary metrics must be derived from the per-case rows so they can never contradict them.
-- Live mode uses the Lovable AI connection when LOVABLE_API_KEY is set, otherwise the MODEL_* endpoint; actual model identity and processing mode remain available in Settings and expandable technical evidence, not everyday answer headings.
+- Live mode uses the Lovable AI connection when LOVABLE_API_KEY is set, otherwise the MODEL_* endpoint; UI status uses presentation-only labels while original model identity stays in recorded evidence and exports, so presentation cannot change provider selection or analytical traces.
 - Plain-language answer presentation derives only from recorded result rows and preserves the original SQL/evidence/export payloads so simplifying copy cannot change analytical results.
 - Live model output is a strict JSON plan (LivePlanSchema, no SQL) compiled deterministically by compileLivePlan; deterministic precheck runs before any model call. Why: the model must never author executable SQL.
 - Live/scripted status labels come only from the shared PlannerReadiness (src/lib/proofsql/readiness.ts) derived from the health check. Why: pages must never disagree about whether the planner is verified.

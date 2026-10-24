@@ -51,7 +51,7 @@ function CovidPage() {
     try {
       const r = await analyzeCovidQuestion({ data: { question: text.trim() } });
       const { question, plan } = interpretModelOutput(r.content, countries);
-      show(plan, `Live AI · ${r.modelName} · ${r.latencyMs} ms${question ? ` · read as ${JSON.stringify(question)}` : ""}`);
+      show(plan, `AI interpretation · ${r.latencyMs} ms${question ? ` · read as ${JSON.stringify(question)}` : ""}`);
     } catch (e) {
       setOut({ plan: { decision: "ERROR", reason: `${e instanceof Error ? e.message : String(e)}. Nothing was answered; try again.` }, cols: [], rows: [], ms: 0 });
     } finally { setThinking(false); }

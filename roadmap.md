@@ -1,4 +1,6 @@
 # Current task
+- [ ] Remove visible provider/model identities throughout the site and check the reported isExpanded diagnostic.
+- [ ] Verify question, evidence, history, evaluation and dataset controls; record any remaining verification limits in chat.md.
 - [x] Refresh shared design and COVID-first question/results screens; simplify visible technical labels without hiding provenance.
 - [x] Check reported userData diagnostic, run tests, verify results on desktop and mobile, update chat.md.
 - [x] Connect COVID / School selection to Ask & Verify, Health, Contract and Evaluation.

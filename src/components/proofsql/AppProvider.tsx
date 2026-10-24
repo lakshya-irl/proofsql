@@ -213,8 +213,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       items.push(missing.length ? { label: "Evaluation suite ready", state: "fail", detail: `No scripted plan for ${missing.join(", ")}.` } : { label: "Evaluation suite ready", state: "ok", detail: `Scripted planner covers all ${EVAL_CASES.length} cases.` });
       const s = await refreshModel();
       items.push(s.eligible
-        ? { label: `Live planner verified — ${s.modelName}`, state: "ok", detail: `Transport, chat and planner-schema probes passed${s.latencyMs != null ? ` in ${s.latencyMs} ms` : ""}.` }
-        : { label: "Live model unavailable — scripted mode active", state: "warn", detail: s.error ?? "Endpoint not reachable." });
+        ? { label: "Question processing verified", state: "ok", detail: `Transport, chat and planner-schema probes passed${s.latencyMs != null ? ` in ${s.latencyMs} ms` : ""}.` }
+        : { label: "Question processing unavailable", state: "warn", detail: "Check the connection in Settings. The selected processing mode has not changed." });
     } finally { setPreparing(false); }
     const r = { at: new Date().toISOString(), items };
     setReadiness(r);
