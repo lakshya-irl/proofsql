@@ -14,6 +14,24 @@ export type Database = {
   }
   public: {
     Tables: {
+      dataset_access: {
+        Row: {
+          can_query: boolean
+          dataset_id: string
+          user_id: string
+        }
+        Insert: {
+          can_query?: boolean
+          dataset_id: string
+          user_id: string
+        }
+        Update: {
+          can_query?: boolean
+          dataset_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       datasets: {
         Row: {
           created_at: string
@@ -44,15 +62,69 @@ export type Database = {
         }
         Relationships: []
       }
+      shared_definitions: {
+        Row: {
+          approved_at: string
+          approved_by: string
+          dataset_key: string
+          definition_key: string
+          id: string
+          payload: Json
+          version: number
+        }
+        Insert: {
+          approved_at?: string
+          approved_by: string
+          dataset_key: string
+          definition_key: string
+          id?: string
+          payload: Json
+          version?: number
+        }
+        Update: {
+          approved_at?: string
+          approved_by?: string
+          dataset_key?: string
+          definition_key?: string
+          id?: string
+          payload?: Json
+          version?: number
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "analyst" | "viewer"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -179,6 +251,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "analyst", "viewer"],
+    },
   },
 } as const
