@@ -13,6 +13,8 @@ import { runCovidPipeline, scanCovidHealth, type CovidHealth } from "@/lib/proof
 import { COVID_FILE, type CovidQuestion } from "@/lib/proofsql/covid";
 import { analyzeCovidQuestion } from "@/lib/model.functions";
 import { LEGACY_RUN_KEYS, mergeRuns, parseRuns, type Skipped } from "@/lib/proofsql/runHistory";
+import { workerExecutor } from "@/lib/proofsql/queryExecution";
+import { COVID_SCHEMA } from "@/lib/proofsql/covidPipeline";
 
 export type ReadinessItem = { label: string; state: "ok" | "warn" | "fail" | "not-run"; detail: string };
 export type Readiness = { at: string; items: ReadinessItem[] };
@@ -22,7 +24,7 @@ type Ctx = {
   contract: Contract; runs: RunResult[]; mode: Mode; model: ModelStatus | null; lastOkCheck: string | null; checking: boolean;
   setMode: (m: Mode) => void; resetDataset: () => Promise<void>; refreshModel: () => Promise<ModelStatus>;
   approve: (k: DefKey) => void; editDefinition: (k: DefKey, patch: Partial<DefVersion>) => void;
-  ask: (q: string) => Promise<RunResult>; livePlanner: ((r: LiveRequest) => Promise<LiveResponse>) | undefined;
+  ask: (q: string, signal?: AbortSignal) => Promise<RunResult>; livePlanner: ((r: LiveRequest) => Promise<LiveResponse>) | undefined;
   modelStatusLabel: string; lastFailCheck: string | null; resetContract: () => void;
   prepareDemo: (clearHistory: boolean) => Promise<Readiness>; readiness: Readiness | null; preparing: boolean;
   /** Shared planner readiness: the only source for live/scripted labels on every page. */
@@ -33,7 +35,7 @@ type Ctx = {
   /** Active dataset for Ask & Verify, Health and Contract. COVID-19 is the main line. */
   dataset: Dataset; setDataset: (d: Dataset) => void;
   covidDb: Database | null; covidHealth: CovidHealth | null; countries: string[]; months: string[];
-  askCovid: (q: string, menu?: CovidQuestion) => Promise<RunResult>;
+  askCovid: (q: string, menu?: CovidQuestion, signal?: AbortSignal) => Promise<RunResult>;
 };
 export type Dataset = "covid" | "school";
 
@@ -79,8 +81,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         const SQL = await (await import("sql.js")).default({ locateFile: (f: string) => `/wasm/${f}` });
         d = new SQL.Database(new Uint8Array(await (await fetch(COVID_FILE)).arrayBuffer()));
-        setCountries(d.exec("SELECT DISTINCT country FROM covid_monthly ORDER BY country")[0]!.values.map((v) => String(v[0])));
-        setMonths(d.exec("SELECT DISTINCT month FROM covid_monthly ORDER BY month")[0]!.values.map((v) => String(v[0])));
+        setCountries(d.exec("SELECT DISTINCT country FROM covid_monthly ORDER BY country")[0]?.values.map((v) => String(v[0])) ?? []);
+        setMonths(d.exec("SELECT DISTINCT month FROM covid_monthly ORDER BY month")[0]?.values.map((v) => String(v[0])) ?? []);
         setCovidHealth(scanCovidHealth(d));
         setCovidDb(d);
       } catch (e) { setDbError(`COVID data: ${e instanceof Error ? e.message : String(e)}`); }
@@ -168,17 +170,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const livePlanner = liveReady ? async (req: LiveRequest) => analyzeQuestion({ data: req }) : undefined;
   const modelStatusLabel = statusLabel(mode, planner);
 
-  const ask = async (q: string) => {
+  const ask = async (q: string, signal?: AbortSignal) => {
     if (!db) throw new Error("Database not loaded");
-    const r = await runPipeline({ question: q, mode, contract, db, modelName: model?.modelName ?? "Qwen/Qwen2.5-Coder-7B-Instruct", modelStatus: modelStatusLabel, livePlanner });
+    const r = await runPipeline({ question: q, mode, contract, db, modelName: model?.modelName ?? "unknown", modelStatus: modelStatusLabel, livePlanner, execute: workerExecutor(db, signal), signal });
     setRuns((rs) => [r, ...rs]);
     return r;
   };
 
-  const askCovid = async (q: string, menu?: CovidQuestion) => {
+  const askCovid = async (q: string, menu?: CovidQuestion, signal?: AbortSignal) => {
     if (!covidDb) throw new Error("COVID database not loaded");
     const live = mode === "live" && liveReady ? async (question: string) => analyzeCovidQuestion({ data: { question } }) : undefined;
-    const r = await runCovidPipeline({ question: q, db: covidDb, countries, mode, modelStatus: modelStatusLabel, menu, livePlanner: live });
+    const r = await runCovidPipeline({ question: q, db: covidDb, countries, mode, modelStatus: modelStatusLabel, menu, livePlanner: live, execute: workerExecutor(covidDb, signal, COVID_SCHEMA), signal });
     setRuns((rs) => [r, ...rs]);
     return r;
   };

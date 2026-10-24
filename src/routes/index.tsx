@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, Ban, CircleHelp, Loader2, ShieldAlert } from "lucide-react";
+import { ArrowRight, Ban, CircleHelp, Loader2, ShieldAlert, Square } from "lucide-react";
 import { useApp } from "@/components/proofsql/AppProvider";
 import { SchemaPanel } from "@/components/proofsql/SchemaPanel";
 import { ProofCard, ResultTable } from "@/components/proofsql/ProofCard";
@@ -36,6 +36,7 @@ function AskPage() {
   const [busy, setBusy] = useState(false);
   const liveBlocked = mode === "live" && !livePlanner;
   const proofPane = useRef<HTMLElement>(null);
+  const controller = useRef<AbortController | null>(null);
   const activeDb = dataset === "covid" ? covidDb : db;
   const schema = dataset === "covid" ? <CovidSchema /> : <SchemaPanel />;
   const questions = dataset === "covid" ? COVID_CASES.map((c) => c.question) : DEMO_QUESTIONS;
@@ -46,9 +47,10 @@ function AskPage() {
   const submit = async (question: string) => {
     if (!question.trim() || busy) return;
     setQ(question); setBusy(true); setRun(null);
-    try { setRun(await (dataset === "covid" ? askCovid(question, mode === "scripted" ? COVID_CASES.find((c) => c.question === question)?.menu : undefined) : ask(question))); }
+    const control = new AbortController(); controller.current = control;
+    try { setRun(await (dataset === "covid" ? askCovid(question, mode === "scripted" ? COVID_CASES.find((c) => c.question === question)?.menu : undefined, control.signal) : ask(question, control.signal))); }
     catch (e) { toast.error("The question could not be checked", { description: `${safeMessage(e)} — nothing was executed. Please try again.` }); }
-    finally { setBusy(false); }
+    finally { setBusy(false); controller.current = null; }
   };
 
   const center = (
@@ -69,6 +71,7 @@ function AskPage() {
           <Button onClick={() => submit(q)} disabled={!activeDb || busy || !q.trim() || liveBlocked}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />} {busy ? "Checking…" : "Ask & verify"}
           </Button>
+          {busy && <Button variant="destructive" onClick={() => controller.current?.abort()}><Square className="h-4 w-4" /> Stop query</Button>}
           {!activeDb && <span className="text-xs text-muted-foreground">Waiting for database…</span>}
           {liveBlocked && <span className="text-xs text-destructive">Live mode selected but the model endpoint is not connected. Switch to scripted mode in Settings.</span>}
         </div>
@@ -92,7 +95,7 @@ function AskPage() {
   );
 
   const proof = busy ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Checking “{q}”…</p>
-    : run ? <ProofCard key={run.id} run={run} /> : <p className="text-sm text-muted-foreground">The Proof Card for the latest run appears here.</p>;
+    : run ? <ProofCard key={run.id} run={run} onAsk={submit} /> : <p className="text-sm text-muted-foreground">The Proof Card for the latest run appears here.</p>;
 
   return (
     <>
