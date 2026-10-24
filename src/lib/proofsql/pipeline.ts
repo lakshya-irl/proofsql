@@ -220,6 +220,8 @@ async function runInner(input: PipelineInput): Promise<RunResult> {
       r.blockedReasons = [...(plan.abstain_reason ? [plan.abstain_reason] : []), ...fw.reasons];
       r.summary = r.decision === "BLOCKED" ? "Blocked by the read-only SQL firewall. Nothing was executed." : "SQL parser failure; nothing was executed.";
       r.error = r.decision === "ERROR" ? fw.parseError : null;
+      if (r.decision === "BLOCKED") r.sql = null; // destructive SQL is withheld
+      else r.errorCode = "SQL_AST_REJECTED";
       return r;
     }
     // Plan-declared tables/columns must also exist

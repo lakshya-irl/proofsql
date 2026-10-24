@@ -70,7 +70,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       s = await getModelStatus();
     } catch (e) {
-      s = { configured: false, reachable: false, modelName: "Qwen/Qwen2.5-Coder-7B-Instruct", maxParams: "8B", withinLimit: true, endpointHost: null, checkedAt: new Date().toISOString(), error: e instanceof Error ? e.message : "Status check failed", latencyMs: null };
+      s = { configured: false, reachable: false, modelName: "unknown", maxParams: "UNKNOWN", withinLimit: false, endpointHost: null, checkedAt: new Date().toISOString(), error: e instanceof Error ? e.message : "Status check failed", latencyMs: null, providerLabel: "unknown", openWeight: "UNKNOWN", fallback: false, transport: "NOT CHECKED", chat: "NOT CHECKED", planner: "NOT CHECKED", eligible: false };
     }
     setModel(s);
     if (s.reachable) { setLastOk(s.checkedAt); localStorage.setItem(LS.ok, s.checkedAt); }
@@ -91,7 +91,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setHydrated(true);
     void load();
     // Live is the primary mode: start in live when the model answered the health check and the user hasn't chosen a mode.
-    void refreshModel().then((s) => { if (!savedMode && s.reachable && s.withinLimit) setModeState("live"); });
+    void refreshModel().then((s) => { if (!savedMode && s.eligible) setModeState("live"); });
   }, [load, refreshModel]);
 
   useEffect(() => { if (hydrated) localStorage.setItem(LS.contract, JSON.stringify(contract)); }, [contract, hydrated]);
@@ -107,11 +107,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const editDefinition = (k: DefKey, patch: Partial<DefVersion>) => setContract((c) => withEdit(c, k, patch));
   const resetContract = () => setContract(DEFAULT_CONTRACT());
 
-  const liveReady = Boolean(model?.reachable && model.withinLimit);
+  const liveReady = Boolean(model?.eligible);
   const livePlanner = liveReady ? async (req: LiveRequest) => analyzeQuestion({ data: req }) : undefined;
   const modelStatusLabel = mode === "scripted"
     ? "Scripted planner — no live model inference"
-    : liveReady ? `Live · ${model!.modelName}${/^\d/.test(model!.maxParams) ? ` (≤${model!.maxParams})` : ""}` : "Model endpoint not connected";
+    : liveReady ? `Live · planner verified — ${model!.modelName}`
+    : model?.transport === "PASS" ? `Live · transport only — ${model.modelName}` : "Model unavailable";
 
   const ask = async (q: string) => {
     if (!db) throw new Error("Database not loaded");
@@ -147,8 +148,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       items.push(missing.length ? { label: "Evaluation suite ready", state: "fail", detail: `No scripted plan for ${missing.join(", ")}.` } : { label: "Evaluation suite ready", state: "ok", detail: `Scripted planner covers all ${EVAL_CASES.length} cases.` });
       const s = await refreshModel();
-      items.push(s.reachable && s.withinLimit
-        ? { label: `Live model reachable — ${s.modelName}`, state: "ok", detail: `Health check answered${s.latencyMs != null ? ` in ${s.latencyMs} ms` : ""}.` }
+      items.push(s.eligible
+        ? { label: `Live planner verified — ${s.modelName}`, state: "ok", detail: `Transport, chat and planner-schema probes passed${s.latencyMs != null ? ` in ${s.latencyMs} ms` : ""}.` }
         : { label: "Live model unavailable — scripted mode active", state: "warn", detail: s.error ?? "Endpoint not reachable." });
     } finally { setPreparing(false); }
     const r = { at: new Date().toISOString(), items };

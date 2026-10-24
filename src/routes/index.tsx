@@ -45,7 +45,7 @@ function AskPage() {
           <label htmlFor="q" className="text-base font-semibold">Ask a question about the demo database</label>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <ModeBadge label={modelStatusLabel} live={mode === "live" && Boolean(livePlanner)} />
-            <span className="text-[11px] text-muted-foreground">Model endpoint: {model ? (model.reachable ? `reachable (${model.modelName})` : "not connected") : "checking…"}</span>
+            <span className="text-[11px] text-muted-foreground">Model: {model ? (model.eligible ? `planner verified (${model.modelName})` : model.transport === "PASS" ? "transport only — planner not verified" : "unavailable") : "checking…"}</span>
             <PrepareDemoButton size="sm" />
           </div>
         </div>
@@ -134,7 +134,10 @@ function Outcome({ run, onAsk }: { run: RunResult; onAsk: (q: string) => void })
           </div>
         )}
         {run.decision === "ERROR" && (
-          <p className="mt-2 flex items-center gap-2 text-sm text-destructive"><ShieldAlert className="h-4 w-4" aria-hidden /> {run.error}</p>
+          <div className="mt-2 text-sm text-destructive">
+            <p className="flex items-center gap-2"><ShieldAlert className="h-4 w-4" aria-hidden /> {run.error}</p>
+            {run.developerTrace && <details className="mt-1 text-xs text-muted-foreground"><summary className="cursor-pointer">Developer trace (secrets removed)</summary><pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded bg-muted p-2 font-mono">{run.developerTrace}</pre></details>}
+          </div>
         )}
       </div>
       {run.radar && <JoinRadarPanel run={run} />}
