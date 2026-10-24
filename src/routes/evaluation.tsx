@@ -19,6 +19,8 @@ export const Route = createFileRoute("/evaluation")({
       { name: "description", content: "Thirteen evaluation cases measured live: semantic answer correctness, clarifications, value grounding, abstentions, join-risk detection and blocks." },
       { property: "og:title", content: "Evaluation Lab — ProofSQL" },
       { property: "og:description", content: "Measured results computed from the detailed rows, not claims." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: EvalPage,

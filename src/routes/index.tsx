@@ -24,6 +24,8 @@ export const Route = createFileRoute("/")({
       { name: "description", content: "Ask a question, then see whether ProofSQL answers, clarifies, abstains or blocks — with SQL and evidence." },
       { property: "og:title", content: "Ask & Verify — ProofSQL" },
       { property: "og:description", content: "Answer, clarify, abstain or block — with SQL, join safety and a Proof Card." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: AskPage,

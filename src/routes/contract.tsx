@@ -16,6 +16,8 @@ export const Route = createFileRoute("/contract")({
       { name: "description", content: "Human-approved, versioned definitions for enrolment, payment total and academic year." },
       { property: "og:title", content: "Semantic Contract — ProofSQL" },
       { property: "og:description", content: "Approved, versioned definitions; edits become drafts until approved." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: ContractPage,

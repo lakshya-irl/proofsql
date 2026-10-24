@@ -14,6 +14,8 @@ export const Route = createFileRoute("/settings")({
       { name: "description", content: "Model endpoint status, parameter limit, live or scripted mode, and demo preparation." },
       { property: "og:title", content: "Settings — ProofSQL" },
       { property: "og:description", content: "Honest model status: live open-weight model or clearly labelled scripted mode." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: SettingsPage,

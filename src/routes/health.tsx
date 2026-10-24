@@ -16,6 +16,8 @@ export const Route = createFileRoute("/health")({
       { name: "description", content: "Full health scan of the demo database: duplicates, missing values, mixed year formats and join risks." },
       { property: "og:title", content: "Database Health — ProofSQL" },
       { property: "og:description", content: "See the risks hidden in a messy database before any question is answered." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: HealthPage,

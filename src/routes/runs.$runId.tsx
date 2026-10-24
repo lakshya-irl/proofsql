@@ -10,6 +10,8 @@ export const Route = createFileRoute("/runs/$runId")({
       { name: "description", content: "Full Proof Card for a past ProofSQL analysis run." },
       { property: "og:title", content: "Proof Card — ProofSQL" },
       { property: "og:description", content: "SQL, assumptions, validation checks and evidence for one run." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: RunPage,
