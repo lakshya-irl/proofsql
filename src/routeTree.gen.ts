@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ContractRouteImport } from './routes/contract'
+import { Route as DatasetsRouteImport } from './routes/datasets'
 import { Route as EvaluationRouteImport } from './routes/evaluation'
 import { Route as HealthRouteImport } from './routes/health'
 import { Route as HistoryRouteImport } from './routes/history'
@@ -25,6 +26,11 @@ const IndexRoute = IndexRouteImport.update({
 const ContractRoute = ContractRouteImport.update({
   id: '/contract',
   path: '/contract',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DatasetsRoute = DatasetsRouteImport.update({
+  id: '/datasets',
+  path: '/datasets',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EvaluationRoute = EvaluationRouteImport.update({
@@ -56,6 +62,7 @@ const RunsRunIdRoute = RunsRunIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/contract': typeof ContractRoute
+  '/datasets': typeof DatasetsRoute
   '/evaluation': typeof EvaluationRoute
   '/health': typeof HealthRoute
   '/history': typeof HistoryRoute
@@ -65,6 +72,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/contract': typeof ContractRoute
+  '/datasets': typeof DatasetsRoute
   '/evaluation': typeof EvaluationRoute
   '/health': typeof HealthRoute
   '/history': typeof HistoryRoute
@@ -75,6 +83,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/contract': typeof ContractRoute
+  '/datasets': typeof DatasetsRoute
   '/evaluation': typeof EvaluationRoute
   '/health': typeof HealthRoute
   '/history': typeof HistoryRoute
@@ -86,6 +95,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/contract'
+    | '/datasets'
     | '/evaluation'
     | '/health'
     | '/history'
@@ -95,6 +105,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/contract'
+    | '/datasets'
     | '/evaluation'
     | '/health'
     | '/history'
@@ -104,6 +115,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/contract'
+    | '/datasets'
     | '/evaluation'
     | '/health'
     | '/history'
@@ -114,6 +126,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ContractRoute: typeof ContractRoute
+  DatasetsRoute: typeof DatasetsRoute
   EvaluationRoute: typeof EvaluationRoute
   HealthRoute: typeof HealthRoute
   HistoryRoute: typeof HistoryRoute
@@ -135,6 +148,13 @@ declare module '@tanstack/react-router' {
       path: '/contract'
       fullPath: '/contract'
       preLoaderRoute: typeof ContractRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/datasets': {
+      id: '/datasets'
+      path: '/datasets'
+      fullPath: '/datasets'
+      preLoaderRoute: typeof DatasetsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/evaluation': {
@@ -178,6 +198,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ContractRoute: ContractRoute,
+  DatasetsRoute: DatasetsRoute,
   EvaluationRoute: EvaluationRoute,
   HealthRoute: HealthRoute,
   HistoryRoute: HistoryRoute,

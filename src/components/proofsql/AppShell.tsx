@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { Activity, BookCheck, FlaskConical, History, SearchCheck, Settings } from "lucide-react";
+import { Activity, BookCheck, Database, FlaskConical, History, SearchCheck, Settings } from "lucide-react";
 import { useApp } from "./AppProvider";
 import { ModeBadge } from "./badges";
 import { DATASET_LABEL } from "@/lib/proofsql/schema";
