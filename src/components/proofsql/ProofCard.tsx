@@ -1,4 +1,4 @@
-import { Copy, Download } from "lucide-react";
+import { ArrowDown, Copy, Download } from "lucide-react";
 import { toast } from "sonner";
 import { isAnswer, type RunResult } from "@/lib/proofsql/pipeline";
 import { download, toCsv, toJson, toMarkdown } from "@/lib/proofsql/exporters";
@@ -42,22 +42,47 @@ export function ResultTable({ run, max = 50 }: { run: RunResult; max?: number })
   );
 }
 
+function inferenceLabel(run: RunResult) {
+  if (run.liveInference) return "Live model inference";
+  if (run.mode === "live") return "No live model inference — deterministic safety/answerability guard";
+  return "Scripted planner — no live model inference";
+}
+
 export function ProofCard({ run }: { run: RunResult }) {
   const slug = run.id;
+  const evidenceId = `evidence-${run.id}`;
+  const warnings = run.evidence.filter((e) => e.state === "WARNING").length + run.checks.filter((c) => c.state === "WARNING").length;
   return (
     <div className="text-sm">
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <DecisionBadge decision={run.decision} />
-        {isAnswer(run.decision) && <span className="text-xs font-medium">{run.confidence.level}</span>}
-        <span className="ml-auto font-mono text-[10px] text-muted-foreground">{run.id}</span>
+      <div className="sticky top-0 z-10 -mx-4 -mt-4 mb-3 border-b border-border bg-card/95 px-4 pb-3 pt-4 backdrop-blur">
+        <div className="flex flex-wrap items-center gap-2">
+          <DecisionBadge decision={run.decision} />
+          {isAnswer(run.decision) && <span className="text-xs font-medium">{run.confidence.level}</span>}
+          {warnings > 0 && <span className="text-xs text-warning-foreground">{warnings} warning{warnings === 1 ? "" : "s"}</span>}
+          <button type="button" onClick={() => document.getElementById(evidenceId)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+            className="ml-auto inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs hover:border-primary hover:text-primary">
+            <ArrowDown className="h-3 w-3" aria-hidden /> Jump to evidence
+          </button>
+        </div>
+        <p className="mt-2 font-medium leading-snug">{run.summary || run.error}</p>
+        <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+          <dt>Inference</dt><dd className="text-foreground">{inferenceLabel(run)}</dd>
+          <dt>Model</dt><dd className="truncate font-mono">{run.liveInference ? run.modelName : "none used"}</dd>
+          <dt>Snapshot</dt><dd className="font-mono">{run.snapshotId}</dd>
+          <dt>Contract</dt><dd>{run.definitions.length ? run.definitions.map((d) => `${d.title} v${d.version}`).join(", ") : "—"}</dd>
+          <dt>Time</dt><dd className="font-mono">{run.executionMs != null ? `SQL ${run.executionMs} ms` : "SQL not executed"}{run.latencyMs != null ? ` · total ${run.latencyMs} ms` : ""}</dd>
+          <dt>Run</dt><dd className="truncate font-mono">{run.id}</dd>
+        </dl>
       </div>
       <div className="mb-3 flex flex-wrap gap-1.5">
-        <Button size="sm" variant="outline" onClick={() => download(`${slug}.json`, toJson(run), "application/json")}><Download className="h-3 w-3" /> Proof Card JSON</Button>
-        <Button size="sm" variant="outline" onClick={() => download(`${slug}.md`, toMarkdown(run), "text/markdown")}><Download className="h-3 w-3" /> Proof Card Markdown</Button>
-        <Button size="sm" variant="outline" disabled={!run.result} title={run.result ? "" : "No result rows for this decision"} onClick={() => download(`${slug}.csv`, toCsv(run), "text/csv")}><Download className="h-3 w-3" /> Result rows CSV</Button>
-        <Button size="sm" variant="outline" disabled={!run.sql} title={run.sql ? "" : "No SQL for this decision"} onClick={() => download(`${slug}.sql`, run.sql ?? "", "text/plain")}><Download className="h-3 w-3" /> SQL file</Button>
+        <Button size="sm" variant="outline" onClick={() => download(`${slug}.json`, toJson(run), "application/json")}><Download className="h-3 w-3" /> JSON</Button>
+        <Button size="sm" variant="outline" onClick={() => download(`${slug}.md`, toMarkdown(run), "text/markdown")}><Download className="h-3 w-3" /> Markdown</Button>
+        <Button size="sm" variant="outline" disabled={!run.result} title={run.result ? "" : "No result rows for this decision"} onClick={() => download(`${slug}.csv`, toCsv(run), "text/csv")}><Download className="h-3 w-3" /> Rows CSV</Button>
+        <Button size="sm" variant="outline" disabled={!run.sql} title={run.sql ? "" : "No SQL for this decision"} onClick={() => download(`${slug}.sql`, run.sql ?? "", "text/plain")}><Download className="h-3 w-3" /> SQL</Button>
         <Button size="sm" variant="outline" disabled={!run.sql} onClick={async () => { try { await navigator.clipboard.writeText(run.sql ?? ""); toast.success("SQL copied"); } catch { toast.error("Clipboard not available"); } }}><Copy className="h-3 w-3" /> Copy SQL</Button>
       </div>
+      {run.decision === "BLOCKED" && <p className="mb-3 rounded-md border border-destructive/50 bg-destructive-soft p-2 text-xs text-destructive">SQL withheld: this request is not permitted on a read-only analyst, so no executable statement is shown.</p>}
+      {run.decision === "ERROR" && <p className="mb-3 rounded-md border border-destructive/50 bg-destructive-soft p-2 text-xs text-destructive">Operational failure{run.errorCode ? ` (code ${run.errorCode})` : ""}. No rows were produced and none are shown. Retrying is safe.</p>}
 
       <Section title="Question">
         <p><span className="text-muted-foreground">Original:</span> {run.question}</p>
