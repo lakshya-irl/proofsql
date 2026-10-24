@@ -24,3 +24,4 @@
 - Dataset selection is shared by the app provider; COVID and school use their own deterministic pipelines, schema allowlists and evaluation cases to prevent cross-dataset queries.
 - Final interactive SQL runs in a terminable read-only Web Worker with its own database copy; model requests and auxiliary evidence queries are not covered by worker cancellation.
 - No sign-in in the UI (owner request); definition approvals are local and open to every visitor. Why: owner wants no login.
+- COVID access roles (src/lib/proofsql/access.ts) are a no-login role picker enforced in the pipeline before execution and re-checked on result rows. Why: owner wants roles without sign-in.
