@@ -1,8 +1,9 @@
-import { Download } from "lucide-react";
-import type { RunResult } from "@/lib/proofsql/pipeline";
+import { Copy, Download } from "lucide-react";
+import { toast } from "sonner";
+import { isAnswer, type RunResult } from "@/lib/proofsql/pipeline";
 import { download, toCsv, toJson, toMarkdown } from "@/lib/proofsql/exporters";
 import { Button } from "@/components/ui/button";
-import { CheckBadge, DecisionBadge } from "./badges";
+import { CheckBadge, DecisionBadge, JoinBadge } from "./badges";
 
 export function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -47,14 +48,15 @@ export function ProofCard({ run }: { run: RunResult }) {
     <div className="text-sm">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <DecisionBadge decision={run.decision} />
-        {run.decision === "ANSWER" && <span className="text-xs font-medium">{run.confidence.level}</span>}
+        {isAnswer(run.decision) && <span className="text-xs font-medium">{run.confidence.level}</span>}
         <span className="ml-auto font-mono text-[10px] text-muted-foreground">{run.id}</span>
       </div>
       <div className="mb-3 flex flex-wrap gap-1.5">
-        <Button size="sm" variant="outline" onClick={() => download(`${slug}.json`, toJson(run), "application/json")}><Download className="h-3 w-3" /> JSON</Button>
-        <Button size="sm" variant="outline" onClick={() => download(`${slug}.md`, toMarkdown(run), "text/markdown")}><Download className="h-3 w-3" /> Markdown</Button>
-        <Button size="sm" variant="outline" disabled={!run.result} title={run.result ? "" : "No result rows for this decision"} onClick={() => download(`${slug}.csv`, toCsv(run), "text/csv")}><Download className="h-3 w-3" /> CSV</Button>
-        <Button size="sm" variant="outline" disabled={!run.sql} title={run.sql ? "" : "No SQL for this decision"} onClick={() => download(`${slug}.sql`, run.sql ?? "", "text/plain")}><Download className="h-3 w-3" /> SQL</Button>
+        <Button size="sm" variant="outline" onClick={() => download(`${slug}.json`, toJson(run), "application/json")}><Download className="h-3 w-3" /> Proof Card JSON</Button>
+        <Button size="sm" variant="outline" onClick={() => download(`${slug}.md`, toMarkdown(run), "text/markdown")}><Download className="h-3 w-3" /> Proof Card Markdown</Button>
+        <Button size="sm" variant="outline" disabled={!run.result} title={run.result ? "" : "No result rows for this decision"} onClick={() => download(`${slug}.csv`, toCsv(run), "text/csv")}><Download className="h-3 w-3" /> Result rows CSV</Button>
+        <Button size="sm" variant="outline" disabled={!run.sql} title={run.sql ? "" : "No SQL for this decision"} onClick={() => download(`${slug}.sql`, run.sql ?? "", "text/plain")}><Download className="h-3 w-3" /> SQL file</Button>
+        <Button size="sm" variant="outline" disabled={!run.sql} onClick={async () => { try { await navigator.clipboard.writeText(run.sql ?? ""); toast.success("SQL copied"); } catch { toast.error("Clipboard not available"); } }}><Copy className="h-3 w-3" /> Copy SQL</Button>
       </div>
 
       <Section title="Question">
@@ -67,6 +69,7 @@ export function ProofCard({ run }: { run: RunResult }) {
           <dt className="text-muted-foreground">Snapshot</dt><dd className="font-mono">{run.snapshotId}</dd>
           <dt className="text-muted-foreground">Planner</dt><dd>{run.plannerLabel}</dd>
           <dt className="text-muted-foreground">Model</dt><dd className="font-mono">{run.modelName}</dd>
+          <dt className="text-muted-foreground">Model mode</dt><dd>{run.mode}{run.liveInference ? " · live inference" : " · no live model inference"}{run.modelLatencyMs != null ? ` · model ${run.modelLatencyMs} ms` : ""}</dd>
           <dt className="text-muted-foreground">Model status</dt><dd>{run.modelStatus}</dd>
           <dt className="text-muted-foreground">Contract</dt><dd>{run.definitions.length ? run.definitions.map((d) => `${d.title} v${d.version} (${d.status})`).join(", ") : "No governed definition used"}</dd>
           <dt className="text-muted-foreground">Metric</dt><dd>{run.metric ?? "—"}</dd>
@@ -74,7 +77,10 @@ export function ProofCard({ run }: { run: RunResult }) {
           <dt className="text-muted-foreground">Time</dt><dd>{run.timeInterpretation ?? "—"}</dd>
           <dt className="text-muted-foreground">Tables</dt><dd className="font-mono">{run.tables.join(", ") || "—"}</dd>
           <dt className="text-muted-foreground">Columns</dt><dd className="font-mono">{run.columns.join(", ") || "—"}</dd>
-          <dt className="text-muted-foreground">Exec time</dt><dd>{run.executionMs != null ? `${run.executionMs} ms` : "—"}</dd>
+          <dt className="text-muted-foreground">Joins</dt><dd className="font-mono text-[11px]">{run.joins.length ? run.joins.map((j) => JSON.stringify(j)).join("; ") : "—"}</dd>
+          <dt className="text-muted-foreground">Join safety</dt><dd className="flex flex-wrap gap-1">{run.radar ? <><JoinBadge status={run.radar.status} />{run.joinStatus && run.joinStatus !== run.radar.status && <JoinBadge status={run.joinStatus} />}</> : <JoinBadge status="NOT_CHECKED" />}</dd>
+          <dt className="text-muted-foreground">SQL safety</dt><dd>{(() => { const fw = run.checks.filter((c) => /firewall|statement|read-only|Tables|Columns|Functions/i.test(c.name)); if (!fw.length) return <CheckBadge state="NOT CHECKED" />; return <CheckBadge state={fw.some((c) => c.state === "FAIL") ? "FAIL" : fw.some((c) => c.state === "WARNING") ? "WARNING" : "PASS"} />; })()}</dd>
+          <dt className="text-muted-foreground">Exec time</dt><dd>{run.executionMs != null ? `${run.executionMs} ms` : "—"}{run.latencyMs != null ? ` · total ${run.latencyMs} ms` : ""}</dd>
         </dl>
       </Section>
       {run.definitions.map((d) => (
@@ -96,13 +102,20 @@ export function ProofCard({ run }: { run: RunResult }) {
           <ul className="space-y-1.5">{run.evidence.map((e, i) => <li key={i} className="flex gap-2 text-xs"><CheckBadge state={e.state} /><span>{e.detail}</span></li>)}</ul>
         </Section>
       )}
+      {(run.clarifications.length > 0 || run.reason) && (
+        <Section title="Decision reasoning">
+          {run.clarifications.length > 0 && <ul className="list-disc pl-4 text-xs">{run.clarifications.map((c) => <li key={c}>{c}</li>)}</ul>}
+          {run.reason && <p className="text-xs">{run.reason}</p>}
+          {run.recommendedFix && <p className="text-xs text-muted-foreground">Recommended fix: {run.recommendedFix}</p>}
+        </Section>
+      )}
       {run.blockedReasons.length > 0 && (
         <Section title="Blocked reasons"><ul className="list-disc pl-4 text-xs text-destructive">{run.blockedReasons.map((b) => <li key={b}>{b}</li>)}</ul></Section>
       )}
       <Section title="Validation checks">
         <ul className="space-y-1.5">{run.checks.map((c, i) => <li key={i} className="flex gap-2 text-xs"><CheckBadge state={c.state} /><span><span className="font-medium">{c.name}</span> — {c.detail}</span></li>)}</ul>
       </Section>
-      {run.decision === "ANSWER" && (
+      {isAnswer(run.decision) && (
         <Section title={`Confidence · ${run.confidence.level}`}>
           <ul className="list-disc pl-4 text-xs">{run.confidence.reasons.map((r, i) => <li key={i}>{r}</li>)}</ul>
         </Section>

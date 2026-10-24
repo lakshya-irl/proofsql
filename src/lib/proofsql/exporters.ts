@@ -19,18 +19,21 @@ export function toMarkdown(r: RunResult): string {
   const l: string[] = [
     `# ProofSQL Proof Card — ${r.decision}`, "",
     `- **Original question:** ${r.question}`, `- **Resolved question:** ${r.resolvedQuestion}`,
-    `- **Dataset:** ${r.datasetName} (${r.snapshotId})`, `- **Planner:** ${r.plannerLabel}`, `- **Model status:** ${r.modelStatus}`,
+    `- **Dataset:** ${r.datasetName} (${r.snapshotId})`, `- **Planner:** ${r.plannerLabel}`, `- **Model:** ${r.modelName} (${r.mode}${r.liveInference ? ", live inference" : ", no live inference"})`, `- **Model status:** ${r.modelStatus}`,
     `- **Definitions:** ${r.definitions.map((d) => `${d.title} v${d.version} (${d.status})`).join(", ") || "none"}`,
     `- **Metric:** ${r.metric ?? "—"} · **Grain:** ${r.grain ?? "—"} · **Time:** ${r.timeInterpretation ?? "—"}`,
-    `- **Confidence:** ${r.confidence.level}`, `- **Execution time:** ${r.executionMs ?? "—"} ms`, "",
+    `- **Confidence:** ${r.confidence.level}`, `- **Execution time:** ${r.executionMs ?? "—"} ms · **Total latency:** ${r.latencyMs ?? "—"} ms`, "",
     "## Summary", r.summary, "",
   ];
   if (r.sql) l.push("## SQL", "```sql", r.sql, "```", `Bound parameters: ${JSON.stringify(r.params)}`, "");
   if (r.assumptions.length) l.push("## Assumptions", ...r.assumptions.map((a) => `- ${a}`), "");
   if (r.normalizationRules.length) l.push("## Normalization rules", ...r.normalizationRules.map((a) => `- ${a}`), "");
+  if (r.tables.length) l.push("## Tables & columns", `- Tables: ${r.tables.join(", ")}`, `- Columns: ${r.columns.join(", ")}`, `- Joins: ${JSON.stringify(r.joins)}`, "");
+  if (r.clarifications.length) l.push("## Clarifications", ...r.clarifications.map((c) => `- ${c}`), "");
+  if (r.reason) l.push("## Reason", r.reason, "");
   l.push("## Validation checks", ...r.checks.map((c) => `- **${c.state}** ${c.name}: ${c.detail}`), "");
   if (r.evidence.length) l.push("## Evidence", ...r.evidence.map((e) => `- **${e.state}** ${e.label}: ${e.detail}`), "");
-  if (r.radar) l.push("## Join safety", `**${r.radar.state}** ${r.radar.title}. ${r.radar.explanation}`, "");
+  if (r.radar) l.push("## Join safety", `**${r.radar.status}**${r.joinStatus && r.joinStatus !== r.radar.status ? ` → **${r.joinStatus}**` : ""} ${r.radar.title}. ${r.radar.explanation}`, "");
   if (r.repair) l.push("## Repaired SQL", "```sql", r.repair.repairedSql, "```", ...r.repair.totals.map((t) => `- ${t.column}: risky ${t.risky} vs repaired ${t.repaired}`), "");
   if (r.blockedReasons.length) l.push("## Blocked reasons", ...r.blockedReasons.map((b) => `- ${b}`), "");
   l.push("## Known limitations", ...r.limitations.map((x) => `- ${x}`));
