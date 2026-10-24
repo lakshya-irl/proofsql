@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { safeMessage } from "@/components/proofsql/ErrorBoundary";
 import { CovidSchema } from "@/components/proofsql/CovidViews";
 import { COVID_CASES } from "@/lib/proofsql/covidEvaluation";
+import { ACCESS_ROLES, ROLE_POLICIES, type AccessRole } from "@/lib/proofsql/access";
 import { simpleAnswer } from "@/lib/proofsql/presentation";
 
 export const Route = createFileRoute("/")({
@@ -33,7 +34,8 @@ export const Route = createFileRoute("/")({
 });
 
 function AskPage() {
-  const { ask, db, mode, livePlanner, dataset, covidDb, askCovid } = useApp();
+  const { ask, db, mode, livePlanner, dataset, covidDb, askCovid, role, setRole } = useApp();
+  const [followUp, setFollowUp] = useState(false);
   const [q, setQ] = useState("");
   const [run, setRun] = useState<RunResult | null>(null);
   const [busy, setBusy] = useState(false);
@@ -49,9 +51,10 @@ function AskPage() {
 
   const submit = async (question: string) => {
     if (!question.trim() || busy) return;
+    const previous = followUp && run?.followUpQuestion ? run.followUpQuestion : undefined;
     setQ(question); setBusy(true); setRun(null);
     const control = new AbortController(); controller.current = control;
-    try { setRun(await (dataset === "covid" ? askCovid(question, mode === "scripted" ? COVID_CASES.find((c) => c.question === question)?.menu : undefined, control.signal) : ask(question, control.signal))); }
+    try { setRun(await (dataset === "covid" ? askCovid(question, mode === "scripted" ? COVID_CASES.find((c) => c.question === question)?.menu : undefined, control.signal, previous) : ask(question, control.signal))); }
     catch (e) { toast.error("The question could not be checked", { description: `${safeMessage(e)} — nothing was executed. Please try again.` }); }
     finally { setBusy(false); controller.current = null; }
   };
@@ -63,6 +66,10 @@ function AskPage() {
           <label htmlFor="q" className="text-lg font-semibold">What would you like to know?</label>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             {dataset === "school" && <PrepareDemoButton size="sm" />}
+            {dataset === "covid" && <label className="flex items-center gap-1 text-xs text-muted-foreground">Viewing as
+              <select aria-label="Viewing as" value={role} onChange={(e) => setRole(e.target.value as AccessRole)} className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground">
+                {ACCESS_ROLES.map((r) => <option key={r} value={r}>{ROLE_POLICIES[r].label}</option>)}
+              </select></label>}
           </div>
         </div>
         <Textarea id="q" value={q} onChange={(e) => setQ(e.target.value)} rows={2} className="mt-2"
@@ -73,9 +80,11 @@ function AskPage() {
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />} {busy ? "Checking…" : "Ask & verify"}
           </Button>
           {busy && <Button variant="destructive" onClick={() => controller.current?.abort()}><Square className="h-4 w-4" /> Stop query</Button>}
+          {dataset === "covid" && run?.followUpQuestion && <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={followUp} onChange={(e) => setFollowUp(e.target.checked)} className="accent-primary" />Follow up on the last answer (e.g. “now only for 2020”, “deaths instead”)</label>}
           {!activeDb && <span className="text-xs text-muted-foreground">Waiting for database…</span>}
           {liveBlocked && <span className="text-xs text-destructive">Question processing is unavailable. Check the connection in Settings.</span>}
         </div>
+        {dataset === "covid" && <p className="mt-2 text-xs text-muted-foreground">{ROLE_POLICIES[role].label}: {ROLE_POLICIES[role].summary}.</p>}
         <div className="mt-3">
           <p className="mb-3 text-xs font-medium text-muted-foreground">{mode === "scripted" ? "Choose a supported question below" : "Suggested questions"}</p>
           <div className="flex flex-wrap gap-1.5">
