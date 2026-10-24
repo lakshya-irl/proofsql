@@ -14,6 +14,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AppProvider } from "../components/proofsql/AppProvider";
 import { AppShell } from "../components/proofsql/AppShell";
+import { Toaster } from "../components/ui/sonner";
 
 function NotFoundComponent() {
   return (
@@ -128,6 +129,7 @@ function RootComponent() {
         <AppShell>
           <Outlet />
         </AppShell>
+        <Toaster />
       </AppProvider>
     </QueryClientProvider>
   );
