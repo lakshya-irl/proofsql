@@ -135,3 +135,17 @@ _Last updated: 2026-10-24_
 - Cleared the copied 0000_public_datasets SQL migration and its snapshot; rescaffolded an empty PostgreSQL v7 migration journal. Left drizzle/schema.ts and drizzle.config.ts unchanged.
 - This resets only source migration history; no database statements ran and no stored data or existing tables were deleted. Upload schema/storage availability in the new backend remains unverified.
 - Existing provider selection still prioritizes LOVABLE_API_KEY over MODEL_* when present; no provider behavior was changed.
+
+## 2026-10-24 — task8135.txt: first-class COVID and Part 2 foundations
+- Reported src/pages/NotFound.tsx is absent; the actual TanStack missing-page view renders successfully. No matching boolean/ReactNode diagnostic was found.
+- Top-bar COVID/School switch now drives Ask & Verify, Schema, Health, Contract and Evaluation. School behavior retained. COVID answers use the AST firewall and measured key uniqueness, with definitions and evidence on the same Proof Card.
+- Added eight real-source COVID evaluation cases. Browser measured scripted COVID 8/8 and school 13/13. Live COVID measured 8/8 with google/gemini-3-flash-preview; CV1–CV5 used inference, CV6–CV8 used deterministic guards. These are observations, not guaranteed future accuracy.
+- Fixed COVID top-ranking execution: parser does not support a placeholder in LIMIT; the compiler now emits a clamped integer LIMIT and keeps the month bound.
+- Added Proof Card follow-up buttons, working evidence jump, schema-change clarification instead of silent renamed-table mapping, attack tests, and isolated final-SQL worker execution with an 8-second deadline.
+- Browser termination check: expensive SQL returned QUERY_CANCELLED; subsequent count query returned all 5,544 COVID rows. Model calls and auxiliary evidence/radar queries are not cancelled by this worker.
+- User chose admins and analysts for shared approvals; only admins manage access. Added separate protected user_roles, shared_definitions and dataset_access; existing public uploads remain public. Shared approvals have server auth/role checks and RLS. Local demo approval remains separate.
+- Google and Lovable sign-in providers enabled; Settings offers sign-in/permissions and admin access-grant controls. Backend has zero auth users: authenticated role assignment/approval end-to-end cannot yet be verified; no arbitrary admin was created.
+- Education integration blocked: only instruction text supplied, no education dataset and no uploaded dataset records. No real education data fabricated.
+- Modified: app provider/shell, Ask/Health/Contract/Evaluation/Settings and head metadata on History/Run routes; COVID compiler/pipeline; school pipeline/error codes; ProofCard; new COVID views/evaluation, worker/executor, permissions/server functions/account/shared-approval controls, Part 2 tests; AGENTS.md, roadmap.md, chat.md and generated backend migration/types.
+- Full arbitrary renamed-table mapping and own-data querying remain pending the actual education file and explicit column/metric definitions. Role checks await a real signed-in account assigned a role.
+- Final checks: 52 tests passed; latest preview build OK. Browser verified COVID Health (5,544 measured rows), Contract, Proof Card follow-up execution and evidence jump. Role sign-in/approval is not end-to-end verified because no account exists.

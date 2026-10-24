@@ -1,5 +1,13 @@
 {
   "version": "7",
   "dialect": "postgresql",
-  "entries": []
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1792873434074,
+      "tag": "0000_shared_definition_roles",
+      "breakpoints": true
+    }
+  ]
 }

@@ -48,7 +48,7 @@ function inferenceLabel(run: RunResult) {
   return "Scripted planner — no live model inference";
 }
 
-export function ProofCard({ run }: { run: RunResult }) {
+export function ProofCard({ run, onAsk }: { run: RunResult; onAsk?: (question: string) => void }) {
   const slug = run.id;
   const evidenceId = `evidence-${run.id}`;
   const warnings = run.evidence.filter((e) => e.state === "WARNING").length + run.checks.filter((c) => c.state === "WARNING").length;
@@ -59,10 +59,10 @@ export function ProofCard({ run }: { run: RunResult }) {
           <DecisionBadge decision={run.decision} />
           {isAnswer(run.decision) && <span className="text-xs font-medium">{run.confidence.level}</span>}
           {warnings > 0 && <span className="text-xs text-warning-foreground">{warnings} warning{warnings === 1 ? "" : "s"}</span>}
-          <button type="button" onClick={() => document.getElementById(evidenceId)?.scrollIntoView({ behavior: "smooth", block: "start" })}
-            className="ml-auto inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs hover:border-primary hover:text-primary">
+          <Button size="sm" variant="outline" onClick={() => document.getElementById(evidenceId)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+            className="ml-auto">
             <ArrowDown className="h-3 w-3" aria-hidden /> Jump to evidence
-          </button>
+          </Button>
         </div>
         <p className="mt-2 font-medium leading-snug">{run.summary || run.error}</p>
         <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
@@ -103,7 +103,7 @@ export function ProofCard({ run }: { run: RunResult }) {
           <dt className="text-muted-foreground">Tables</dt><dd className="font-mono">{run.tables.join(", ") || "—"}</dd>
           <dt className="text-muted-foreground">Columns</dt><dd className="font-mono">{run.columns.join(", ") || "—"}</dd>
           <dt className="text-muted-foreground">Joins</dt><dd className="font-mono text-[11px]">{run.joins.length ? run.joins.map((j) => JSON.stringify(j)).join("; ") : "—"}</dd>
-          <dt className="text-muted-foreground">Join safety</dt><dd className="flex flex-wrap gap-1">{run.radar ? <><JoinBadge status={run.radar.status} />{run.joinStatus && run.joinStatus !== run.radar.status && <JoinBadge status={run.joinStatus} />}</> : <JoinBadge status="NOT_CHECKED" />}</dd>
+          <dt className="text-muted-foreground">Join safety</dt><dd className="flex flex-wrap gap-1">{run.radar ? <><JoinBadge status={run.radar.status} />{run.joinStatus && run.joinStatus !== run.radar.status && <JoinBadge status={run.joinStatus} />}</> : <JoinBadge status={run.joinStatus ?? "NOT_CHECKED"} />}</dd>
           <dt className="text-muted-foreground">SQL safety</dt><dd>{(() => { const fw = run.checks.filter((c) => /firewall|parsed|statement|read-only|tables|columns|function/i.test(c.name)); if (!fw.length) return <CheckBadge state="NOT CHECKED" />; return <CheckBadge state={fw.some((c) => c.state === "FAIL") ? "FAIL" : fw.some((c) => c.state === "WARNING") ? "WARNING" : "PASS"} />; })()}</dd>
           <dt className="text-muted-foreground">Exec time</dt><dd>{run.executionMs != null ? `${run.executionMs} ms` : "—"}{run.latencyMs != null ? ` · total ${run.latencyMs} ms` : ""}</dd>
         </dl>
@@ -137,9 +137,17 @@ export function ProofCard({ run }: { run: RunResult }) {
       {run.blockedReasons.length > 0 && (
         <Section title="Blocked reasons"><ul className="list-disc pl-4 text-xs text-destructive">{run.blockedReasons.map((b) => <li key={b}>{b}</li>)}</ul></Section>
       )}
+      <div id={evidenceId} />
       <Section title="Validation checks">
         <ul className="space-y-1.5">{run.checks.map((c, i) => <li key={i} className="flex gap-2 text-xs"><CheckBadge state={c.state} /><span><span className="font-medium">{c.name}</span> — {c.detail}</span></li>)}</ul>
       </Section>
+      {onAsk && <Section title="Follow-up questions"><div className="flex flex-col gap-2">{(run.suggestions.length ? run.suggestions : run.datasetName.includes("COVID") ? [
+        { label: "Compare Brazil deaths: January → June 2021", question: "Change in deaths in Brazil from January 2021 to June 2021" },
+        { label: "Top countries: June 2021", question: "Top 5 countries by confirmed cases in June 2021" },
+      ] : [
+        { label: "Compare active students: 2023-24 → 2024-25", question: "Which schools had a decrease in distinct active students from academic year 2023-24 to 2024-25?" },
+        { label: "Completed payments by school", question: "Sum completed payments by school" },
+      ]).map((s) => <Button key={s.question} variant="outline" className="h-auto whitespace-normal justify-start text-left text-xs" onClick={() => onAsk(s.question)}>{s.label}</Button>)}</div></Section>}
       {isAnswer(run.decision) && (
         <Section title={`Confidence · ${run.confidence.level}`}>
           <ul className="list-disc pl-4 text-xs">{run.confidence.reasons.map((r, i) => <li key={i}>{r}</li>)}</ul>

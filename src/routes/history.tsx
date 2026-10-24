@@ -16,6 +16,8 @@ export const Route = createFileRoute("/history")({
       { name: "description", content: "Every analysis run with its decision, SQL, warnings and the definition versions it used." },
       { property: "og:title", content: "Run History — ProofSQL" },
       { property: "og:description", content: "Reopen any past run and inspect its full Proof Card." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: HistoryPage,

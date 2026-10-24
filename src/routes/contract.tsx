@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { current, type DefKey } from "@/lib/proofsql/contract";
 import { YEAR_RULES } from "@/lib/proofsql/schema";
 import { CovidContract } from "@/components/proofsql/CovidViews";
+import { SharedApproval } from "@/components/proofsql/SharedApproval";
 
 export const Route = createFileRoute("/contract")({
   head: () => ({
@@ -15,6 +16,8 @@ export const Route = createFileRoute("/contract")({
       { name: "description", content: "Human-approved, versioned definitions for enrolment, payment total and academic year." },
       { property: "og:title", content: "Semantic Contract — ProofSQL" },
       { property: "og:description", content: "Approved, versioned definitions; edits become drafts until approved." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   component: ContractPage,
@@ -50,6 +53,7 @@ function SchoolContractPage() {
               <span className={`rounded px-2 py-0.5 font-mono text-[10px] font-semibold ${d.status === "APPROVED" ? "bg-success-soft text-success" : "bg-warning-soft text-warning-foreground"}`}>{d.status}</span>
               <span className="font-mono text-xs text-muted-foreground">v{d.version}</span>
               <div className="ml-auto flex gap-2">
+                <SharedApproval dataset="school" definition={d} />
                 <Button size="sm" variant="outline" onClick={() => { setEditing(k); setDraft({ meaning: d.meaning, expression: d.expression, grain: d.grain }); }}><Pencil className="h-3 w-3" /> Edit</Button>
                 <Button size="sm" disabled={d.status === "APPROVED"} title={d.status === "APPROVED" ? "This version is already approved" : ""} onClick={() => approve(k)}><Check className="h-3 w-3" /> Approve v{d.version}</Button>
               </div>
