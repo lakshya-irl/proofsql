@@ -108,3 +108,9 @@ _Last updated: 2026-10-24_
 - Evaluation Lab: new columns Inference used / Mode / Provider / Model / Error code; header says Live provider only if A1-A3, J1, J2 all used live inference.
 - Tests: 32 pass (8 new). Browser check: all three pages show "Live · planner verified — google/gemini-3-flash-preview".
 - Not browser-tested: a real failed health check (covered by unit tests only).
+
+## 2026-10-24 — Logo, error handling, UI polish (request7198.txt)
+- Uploaded ProofSQL logo: icon part used as favicon (public/favicon.png, favicon.ico removed) and sidebar logo.
+- Error handling: page-level error boundary (one broken page no longer blanks the app, with Try again / Reload), toast for any unhandled async failure, Ask & Verify catches failed questions (toast, nothing executed, no stale Proof Card). Messages are scrubbed of keys/tokens.
+- Colours moved to the logo's blue; visible keyboard focus everywhere; no sideways page scrolling.
+- Checked: all 6 pages load with no errors; 32 tests pass. Full visual redesign of every page not done yet.

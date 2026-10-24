@@ -14,13 +14,13 @@ type State = { error: Error | null };
 
 /** Page-level boundary: one broken panel never blanks the whole app. */
 export class PageErrorBoundary extends Component<Props, State> {
-  state: State = { error: null };
+  override state: State = { error: null };
   static getDerivedStateFromError(error: Error): State { return { error }; }
-  componentDidCatch(error: Error, info: ErrorInfo) {
+  override componentDidCatch(error: Error, info: ErrorInfo) {
     console.error(error, info.componentStack);
     reportLovableError(error, { boundary: `proofsql_${this.props.area}` });
   }
-  render() {
+  override render() {
     if (!this.state.error) return this.props.children;
     return (
       <div role="alert" className="mx-auto mt-10 max-w-lg rounded-lg border border-destructive/40 bg-card p-6">
