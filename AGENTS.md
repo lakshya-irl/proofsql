@@ -23,4 +23,4 @@
 - This remix starts with an empty Drizzle migration journal; add future schema changes through the migration tool rather than restoring the source project's history, to avoid replaying copied changes against the new database.
 - Dataset selection is shared by the app provider; COVID and school use their own deterministic pipelines, schema allowlists and evaluation cases to prevent cross-dataset queries.
 - Final interactive SQL runs in a terminable read-only Web Worker with its own database copy; model requests and auxiliary evidence queries are not covered by worker cancellation.
-- Shared approvals and dataset grants use authenticated server functions plus RLS roles in public.user_roles; local demo approvals are not shared authority.
+- No sign-in in the UI (owner request); definition approvals are local and open to every visitor. Why: owner wants no login.
