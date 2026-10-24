@@ -2,21 +2,28 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import type { Database } from "sql.js";
 import { buildFixtureSql } from "@/lib/proofsql/fixture";
 import { scanHealth, type Health } from "@/lib/proofsql/health";
-import { DEFAULT_CONTRACT, current, type Contract, type DefKey, type DefVersion } from "@/lib/proofsql/contract";
-import { runPipeline, type Mode, type RunResult } from "@/lib/proofsql/pipeline";
-import { callPlanner, getModelStatus, type ModelStatus } from "@/lib/model.functions";
+import { DEFAULT_CONTRACT, allApproved, withEdit, type Contract, type DefKey, type DefVersion } from "@/lib/proofsql/contract";
+import { runPipeline, type LiveRequest, type LiveResponse, type Mode, type RunResult } from "@/lib/proofsql/pipeline";
+import { analyzeQuestion, getModelStatus, type ModelStatus } from "@/lib/model.functions";
+import { EVAL_CASES } from "@/lib/proofsql/evaluation";
+import { scriptedPlan } from "@/lib/proofsql/planner";
+
+export type ReadinessItem = { label: string; state: "ok" | "warn" | "fail" | "not-run"; detail: string };
+export type Readiness = { at: string; items: ReadinessItem[] };
 
 type Ctx = {
   db: Database | null; dbError: string | null; health: Health | null; loadedAt: string | null;
   contract: Contract; runs: RunResult[]; mode: Mode; model: ModelStatus | null; lastOkCheck: string | null; checking: boolean;
-  setMode: (m: Mode) => void; resetDataset: () => Promise<void>; refreshModel: () => Promise<void>;
+  setMode: (m: Mode) => void; resetDataset: () => Promise<void>; refreshModel: () => Promise<ModelStatus>;
   approve: (k: DefKey) => void; editDefinition: (k: DefKey, patch: Partial<DefVersion>) => void;
-  ask: (q: string) => Promise<RunResult>; livePlanner: ((p: string) => Promise<string>) | undefined;
-  modelStatusLabel: string;
+  ask: (q: string) => Promise<RunResult>; livePlanner: ((r: LiveRequest) => Promise<LiveResponse>) | undefined;
+  modelStatusLabel: string; lastFailCheck: string | null; resetContract: () => void;
+  prepareDemo: (clearHistory: boolean) => Promise<Readiness>; readiness: Readiness | null; preparing: boolean;
 };
 
 const AppCtx = createContext<Ctx | null>(null);
-const LS = { contract: "proofsql.contract.v1", runs: "proofsql.runs.v1", mode: "proofsql.mode.v1", ok: "proofsql.lastok.v1" };
+// contract key v2: the demo-ready baseline (APPROVED v1) replaces older draft-only state.
+const LS = { contract: "proofsql.contract.v2", runs: "proofsql.runs.v2", mode: "proofsql.mode.v1", ok: "proofsql.lastok.v1", fail: "proofsql.lastfail.v1" };
 
 async function createDb(): Promise<Database> {
   const initSqlJs = (await import("sql.js")).default;
@@ -38,28 +45,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [lastOkCheck, setLastOk] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const [lastFailCheck, setLastFail] = useState<string | null>(null);
+  const [readiness, setReadiness] = useState<Readiness | null>(null);
+  const [preparing, setPreparing] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<{ d: Database; h: Health } | null> => {
     try {
       const d = await createDb();
       setDb((old) => { old?.close(); return d; });
-      setHealth(scanHealth(d));
+      const h = scanHealth(d);
+      setHealth(h);
       setLoadedAt(new Date().toISOString());
       setDbError(null);
+      return { d, h };
     } catch (e) {
       setDbError(e instanceof Error ? e.message : "Database failed to load");
+      return null;
     }
   }, []);
 
-  const refreshModel = useCallback(async () => {
+  const refreshModel = useCallback(async (): Promise<ModelStatus> => {
     setChecking(true);
+    let s: ModelStatus;
     try {
-      const s = await getModelStatus();
-      setModel(s);
-      if (s.reachable) { setLastOk(s.checkedAt); localStorage.setItem(LS.ok, s.checkedAt); }
+      s = await getModelStatus();
     } catch (e) {
-      setModel({ configured: false, reachable: false, modelName: "Qwen/Qwen2.5-Coder-7B-Instruct", maxParams: "8B", withinLimit: true, endpointHost: null, checkedAt: new Date().toISOString(), error: e instanceof Error ? e.message : "Status check failed" });
-    } finally { setChecking(false); }
+      s = { configured: false, reachable: false, modelName: "Qwen/Qwen2.5-Coder-7B-Instruct", maxParams: "8B", withinLimit: true, endpointHost: null, checkedAt: new Date().toISOString(), error: e instanceof Error ? e.message : "Status check failed", latencyMs: null };
+    }
+    setModel(s);
+    if (s.reachable) { setLastOk(s.checkedAt); localStorage.setItem(LS.ok, s.checkedAt); }
+    else { setLastFail(s.checkedAt); localStorage.setItem(LS.fail, s.checkedAt); }
+    setChecking(false);
+    return s;
   }, []);
 
   useEffect(() => {
@@ -68,6 +85,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const r = localStorage.getItem(LS.runs); if (r) setRuns(JSON.parse(r));
       const m = localStorage.getItem(LS.mode); if (m === "live" || m === "scripted") setModeState(m);
       setLastOk(localStorage.getItem(LS.ok));
+      setLastFail(localStorage.getItem(LS.fail));
     } catch { /* corrupted local state is ignored */ }
     setHydrated(true);
     void load();
@@ -84,13 +102,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     list[list.length - 1] = { ...cur, status: "APPROVED", updatedAt: new Date().toISOString() };
     return { ...c, [k]: list };
   });
-  const editDefinition = (k: DefKey, patch: Partial<DefVersion>) => setContract((c) => {
-    const cur = current(c, k);
-    return { ...c, [k]: [...c[k], { ...cur, ...patch, version: cur.version + 1, status: "DRAFT", updatedAt: new Date().toISOString() }] };
-  });
+  const editDefinition = (k: DefKey, patch: Partial<DefVersion>) => setContract((c) => withEdit(c, k, patch));
+  const resetContract = () => setContract(DEFAULT_CONTRACT());
 
   const liveReady = Boolean(model?.reachable && model.withinLimit);
-  const livePlanner = liveReady ? async (prompt: string) => (await callPlanner({ data: { prompt } })).content : undefined;
+  const livePlanner = liveReady ? async (req: LiveRequest) => analyzeQuestion({ data: req }) : undefined;
   const modelStatusLabel = mode === "scripted"
     ? "Scripted planner — no live model inference"
     : liveReady ? `Live · ${model!.modelName} (≤${model!.maxParams})` : "Model endpoint not connected";
@@ -104,11 +120,47 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const resetDataset = async () => { setHealth(null); await load(); };
 
+  /** Prepare Demo: every check reports only what actually ran. */
+  const prepareDemo = async (clearHistory: boolean): Promise<Readiness> => {
+    setPreparing(true);
+    const items: ReadinessItem[] = [];
+    try {
+      setHealth(null);
+      const loaded = await load();
+      items.push(loaded ? { label: "Database loaded", state: "ok", detail: "Rebuilt from the fixed seed." } : { label: "Database loaded", state: "fail", detail: "The demo database failed to load." });
+      items.push(loaded ? { label: "Health scan complete", state: "ok", detail: `${loaded.h.warnings.length} warnings across ${loaded.h.tables.length} tables.` } : { label: "Health scan complete", state: "not-run", detail: "Skipped: no database." });
+      const c = DEFAULT_CONTRACT();
+      setContract(c);
+      items.push(allApproved(c) ? { label: "Semantic contract approved", state: "ok", detail: "Enrolment, Payment total, Academic year — APPROVED v1." } : { label: "Semantic contract approved", state: "fail", detail: "Baseline is not approved." });
+      if (clearHistory) setRuns([]);
+      const missing = EVAL_CASES.filter((e) => !scriptedPlan(e.question)).map((e) => e.id);
+      if (loaded) {
+        const probe = await runPipeline({ question: "Compare enrolment and payment totals by school.", mode: "scripted", contract: c, db: loaded.d, modelName: "scripted", modelStatus: "Scripted planner — no live model inference" });
+        const radarOk = probe.radar?.status === "RISK_DETECTED" && probe.joinStatus === "REPAIR_APPLIED" && Boolean(probe.result);
+        items.push(radarOk ? { label: "Join Safety Radar ready", state: "ok", detail: "Fan-out detected and repaired SQL executed." } : { label: "Join Safety Radar ready", state: "fail", detail: `Probe returned ${probe.decision} / ${probe.joinStatus ?? "no status"}.` });
+        const cardOk = probe.checks.length > 0 && Boolean(probe.sql);
+        items.push(cardOk ? { label: "Proof Card ready", state: "ok", detail: `${probe.checks.length} checks recorded on the probe run.` } : { label: "Proof Card ready", state: "fail", detail: "Probe run produced no checks." });
+      } else {
+        items.push({ label: "Join Safety Radar ready", state: "not-run", detail: "Skipped: no database." }, { label: "Proof Card ready", state: "not-run", detail: "Skipped: no database." });
+      }
+      items.push(missing.length ? { label: "Evaluation suite ready", state: "fail", detail: `No scripted plan for ${missing.join(", ")}.` } : { label: "Evaluation suite ready", state: "ok", detail: `Scripted planner covers all ${EVAL_CASES.length} cases.` });
+      const s = await refreshModel();
+      items.push(s.reachable && s.withinLimit
+        ? { label: `Live model reachable — ${s.modelName}`, state: "ok", detail: `Health check answered${s.latencyMs != null ? ` in ${s.latencyMs} ms` : ""}.` }
+        : { label: "Live model unavailable — scripted mode active", state: "warn", detail: s.error ?? "Endpoint not reachable." });
+      if (!(s.reachable && s.withinLimit)) setMode("scripted");
+    } finally { setPreparing(false); }
+    const r = { at: new Date().toISOString(), items };
+    setReadiness(r);
+    return r;
+  };
+
   const value = useMemo<Ctx>(() => ({
     db, dbError, health, loadedAt, contract, runs, mode, model, lastOkCheck, checking,
     setMode, resetDataset, refreshModel, approve, editDefinition, ask, livePlanner, modelStatusLabel,
+    lastFailCheck, resetContract, prepareDemo, readiness, preparing,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [db, dbError, health, loadedAt, contract, runs, mode, model, lastOkCheck, checking, modelStatusLabel]);
+  }), [db, dbError, health, loadedAt, contract, runs, mode, model, lastOkCheck, checking, modelStatusLabel, lastFailCheck, readiness, preparing]);
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }
