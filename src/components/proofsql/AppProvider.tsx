@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import type React from "react";
 import type { Database } from "sql.js";
 import { buildFixtureSql } from "@/lib/proofsql/fixture";
 import { scanHealth, type Health } from "@/lib/proofsql/health";
