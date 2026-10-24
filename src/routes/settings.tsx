@@ -43,16 +43,22 @@ function SettingsPage() {
           <h2 className="font-semibold">Model endpoint</h2>
           <Button size="sm" variant="outline" className="ml-auto" onClick={() => void refreshModel()} disabled={checking}>{checking ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />} Run health check</Button>
         </div>
-        <dl className="grid grid-cols-[180px_1fr] gap-y-1.5 text-sm">
-          <dt className="text-muted-foreground">Model name</dt><dd className="font-mono">{model?.modelName ?? "—"}</dd>
-          <dt className="text-muted-foreground">Parameter limit</dt><dd className="font-mono">{model?.maxParams ?? "8B"} {model && !model.withinLimit && <span className="text-destructive">(exceeds 8B — live mode refused)</span>}</dd>
-          <dt className="text-muted-foreground">Endpoint</dt><dd>{model?.configured ? <span className="font-mono">{model.endpointHost}</span> : "Model endpoint not connected"}</dd>
-          <dt className="text-muted-foreground">Connection</dt><dd className="flex items-center gap-2">{model ? <CheckBadge state={model.reachable ? "PASS" : "FAIL"} /> : <CheckBadge state="NOT CHECKED" />}<span className="text-xs">{model?.reachable ? `Reachable${model.latencyMs != null ? ` (${model.latencyMs} ms)` : ""}` : model?.error ?? "Checking…"}</span></dd>
+        {model?.fallback && <p className="mb-2 rounded border border-warning bg-warning-soft p-2 text-xs text-warning-foreground">Fallback provider — does not satisfy the AI-02 open-weight constraint.</p>}
+        <dl className="grid grid-cols-[minmax(0,160px)_minmax(0,1fr)] gap-x-2 gap-y-1.5 text-sm">
+          <dt className="text-muted-foreground">Provider</dt><dd>{model?.providerLabel ?? "—"}</dd>
+          <dt className="text-muted-foreground">Model ID</dt><dd className="break-all font-mono">{model?.modelName ?? "—"}</dd>
+          <dt className="text-muted-foreground">Endpoint host</dt><dd>{model?.configured ? <span className="break-all font-mono">{model.endpointHost}</span> : "Model endpoint not connected"}</dd>
+          <dt className="text-muted-foreground">Parameter count</dt><dd className="font-mono">{model?.maxParams ?? "UNKNOWN"}</dd>
+          <dt className="text-muted-foreground">Open-weight compliance</dt><dd><CheckBadge state={model?.openWeight === "PASS" ? "PASS" : model?.openWeight === "FAIL" ? "FAIL" : "NOT CHECKED"} /> <span className="text-xs">{model?.openWeight ?? "UNKNOWN"}</span></dd>
+          <dt className="text-muted-foreground">Transport</dt><dd><CheckBadge state={model?.transport ?? "NOT CHECKED"} /></dd>
+          <dt className="text-muted-foreground">Chat completion</dt><dd><CheckBadge state={model?.chat ?? "NOT CHECKED"} /></dd>
+          <dt className="text-muted-foreground">Planner schema</dt><dd><CheckBadge state={model?.planner ?? "NOT CHECKED"} /></dd>
+          <dt className="text-muted-foreground">Live demo eligible</dt><dd className="text-xs"><span className="font-semibold">{model?.eligible ? "YES" : "NO"}</span>{!model?.eligible && model?.error ? ` — ${model.error}` : model?.latencyMs != null ? ` (chat probe ${model.latencyMs} ms)` : ""}</dd>
           <dt className="text-muted-foreground">Last check</dt><dd className="text-xs">{model ? new Date(model.checkedAt).toLocaleString() : "—"}</dd>
           <dt className="text-muted-foreground">Last successful check</dt><dd className="text-xs">{lastOkCheck ? new Date(lastOkCheck).toLocaleString() : "Never"}</dd>
           <dt className="text-muted-foreground">Last failed check</dt><dd className="text-xs">{lastFailCheck ? new Date(lastFailCheck).toLocaleString() : "Never"}</dd>
         </dl>
-        <p className="mt-3 text-xs text-muted-foreground">Health check calls the endpoint's model list with an 8-second timeout. The key stays on the server. No hidden fallback model is used.</p>
+        <p className="mt-3 text-xs text-muted-foreground">Health check runs three server-side probes: transport, a tiny chat completion, and a planner-schema probe (no SQL executed). The key stays on the server. No hidden fallback model is used.</p>
       </section>
       <section className="rounded-lg border border-border bg-card p-4">
         <div className="mb-2 flex items-center gap-2">
