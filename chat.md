@@ -120,3 +120,8 @@ _Last updated: 2026-10-24_
 - Run History: "Local to this browser" label, Export all (JSON), Import JSON (validated; skipped records listed with reasons; duplicates ignored; imported BLOCKED runs lose any SQL), Clear, legacy key migration (proofsql.runs.v1 / proofsql.runs) with skipped report, card list on phones.
 - Verified in browser: live question "decrease in distinct active students 2023-24 → 2024-25" → ANSWER, 3 schools, google/gemini-3-flash-preview, compiled SQL with bound params, assumptions, rows. No sideways scrolling at 320 and 768 on Ask & Verify and Run History. 38 tests pass (6 new).
 - Not done: P2; query cancellation NOT CHECKED; import from file not browser-tested (unit tests only).
+
+## 2026-10-24 — Datasets uploads (MARIO GAMERS FF)
+- Added /datasets: public online uploads (CSV/SQLite/SQL, 20 MB), no sign-in; real measured profile (rows, NULLs, placeholders, duplicates).
+- UDISE+ real data NOT loaded: data.gov.in / UDISE+ download not reachable from the sandbox; user must upload the CSV. Ask & Verify on uploaded data NOT SUPPORTED yet.
+- Security: uploads are visible to everyone (no sign-in by owner decision).
