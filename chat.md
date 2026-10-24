@@ -100,3 +100,11 @@ _Last updated: 2026-10-24_
 - Live errors return ERROR with a code (INVALID_JSON, PLAN_SCHEMA_INVALID, UNSUPPORTED_PLAN, …) and a redacted developer trace; blocked runs withhold SQL.
 - Measured in preview: live evaluation 13/13; only A1-A3, J1, J2 used live inference, the other 8 were decided by deterministic guards.
 - Not done yet: P1 (Proof Card header, Run History export/import, mobile checks), P2, query cancellation (NOT CHECKED).
+
+## 2026-10-24 — Planner readiness consistency (instruction7703.txt)
+- One shared planner readiness object (src/lib/proofsql/readiness.ts) in AppProvider; header, Ask & Verify, Settings, Evaluation Lab all read it.
+- Health probe now uses "Count schools by district." and must also compile through the deterministic compiler; schema not loosened.
+- Cached readiness dropped when provider/model/config fingerprint changes; fresh session shows explicit unknown/"Model unavailable".
+- Evaluation Lab: new columns Inference used / Mode / Provider / Model / Error code; header says Live provider only if A1-A3, J1, J2 all used live inference.
+- Tests: 32 pass (8 new). Browser check: all three pages show "Live · planner verified — google/gemini-3-flash-preview".
+- Not browser-tested: a real failed health check (covered by unit tests only).
