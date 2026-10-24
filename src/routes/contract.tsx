@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { current, type DefKey } from "@/lib/proofsql/contract";
 import { YEAR_RULES } from "@/lib/proofsql/schema";
+import { CovidContract } from "@/components/proofsql/CovidViews";
 
 export const Route = createFileRoute("/contract")({
   head: () => ({
@@ -22,6 +23,11 @@ export const Route = createFileRoute("/contract")({
 const KEYS: DefKey[] = ["enrolment", "payment_total", "academic_year"];
 
 function ContractPage() {
+  const { dataset } = useApp();
+  return dataset === "covid" ? <CovidContract /> : <SchoolContractPage />;
+}
+
+function SchoolContractPage() {
   const { contract, approve, editDefinition, health, resetContract } = useApp();
   const [editing, setEditing] = useState<DefKey | null>(null);
   const [draft, setDraft] = useState({ meaning: "", expression: "", grain: "" });
