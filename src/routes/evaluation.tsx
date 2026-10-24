@@ -70,24 +70,24 @@ function EvalPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-start gap-3">
         <div>
-          <h1 className="text-xl font-semibold">Evaluation Lab</h1>
-          <p className="text-sm text-muted-foreground">{cases.length} cases · {dataset === "covid" ? "Real COVID-19 country totals" : `School fixture ${FIXTURE_VERSION}`} · <span className="font-medium">{modelStatusLabel}</span></p>
+          <h1 className="text-xl font-semibold">Accuracy checks</h1>
+          <p className="text-sm text-muted-foreground">{cases.length} cases · {dataset === "covid" ? "Real COVID-19 country totals" : `School fixture ${FIXTURE_VERSION}`}</p>
         </div>
         <div className="ml-auto flex flex-wrap gap-2">
           {dataset === "school" && <Button variant="outline" onClick={resetAndRun} disabled={busy || preparing || liveBlocked}>{preparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />} Reset and prepare evaluation</Button>}
           <Button onClick={() => run()} disabled={!activeDb || busy || liveBlocked}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} Run evaluation</Button>
         </div>
       </div>
-      {!planner.eligibleForLive && mode === "live" && <p className="rounded border border-warning bg-warning-soft p-2 text-xs text-warning-foreground">Live planner not verified{planner.errorCode ? ` (${planner.errorCode})` : ""}. Live runs are disabled; switch to scripted in Settings.</p>}
-      {mode === "scripted" && <p className="rounded border border-warning bg-warning-soft p-2 text-xs text-warning-foreground">Scripted · no live model inference. These results measure the validation pipeline with scripted plans and are not live-model accuracy.</p>}
-      {liveBlocked && <p className="text-xs text-destructive">Live mode is selected but the model endpoint is not connected.</p>}
+      {!planner.eligibleForLive && mode === "live" && <p className="rounded border border-warning bg-warning-soft p-2 text-xs text-warning-foreground">Question processing not verified{planner.errorCode ? ` (${planner.errorCode})` : ""}. Check the connection or choose preset questions in Settings.</p>}
+      {mode === "scripted" && <p className="rounded border border-warning bg-warning-soft p-2 text-xs text-warning-foreground">These checks use preset question plans, not AI interpretation. They still query the actual selected data.</p>}
+      {liveBlocked && <p className="text-xs text-destructive">Question processing is not connected.</p>}
       {drafts.length > 0 && <p className="text-xs text-warning-foreground">Draft definitions ({drafts.join(", ")}) make governed answer cases return CLARIFY. Use "Reset and prepare evaluation" to restore the approved baseline.</p>}
 
       {res && (
         <>
-          <div className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">{runKind}</span> · Live inference used in {liveUsed.length}/{res.length} cases{liveUsed.length ? ` (${liveUsed.join(", ")})` : ""} · Status at run: {ranWith?.label} · Model: <span className="font-mono">{fullyLive || liveUsed.length ? res.find((o) => o.run.liveInference)?.run.modelName : "none (scripted)"}</span> · Run at {ranAt && new Date(ranAt).toLocaleString()} · Average latency {Math.round(res.reduce((a, o) => a + o.ms, 0) / res.length)} ms</div>
+          <details className="text-xs text-muted-foreground"><summary className="cursor-pointer">Technical run details</summary><div><span className="font-semibold text-foreground">{runKind}</span> · Live inference used in {liveUsed.length}/{res.length} cases{liveUsed.length ? ` (${liveUsed.join(", ")})` : ""} · Status at run: {ranWith?.label} · Model: <span className="font-mono">{fullyLive || liveUsed.length ? res.find((o) => o.run.liveInference)?.run.modelName : "none (scripted)"}</span> · Run at {ranAt && new Date(ranAt).toLocaleString()} · Average latency {Math.round(res.reduce((a, o) => a + o.ms, 0) / res.length)} ms</div></details>
           {targetMet
-            ? <p className="rounded border border-success bg-success-soft p-2 text-xs text-success">{runKind}: all {res.length} cases passed. Summary counts below are derived from these measured rows.</p>
+            ? <p className="rounded border border-success bg-success-soft p-2 text-xs text-success">All {res.length} checks passed. These results were measured against the selected data.</p>
             : <p className="rounded border border-destructive bg-destructive-soft p-2 text-xs text-destructive">{failed.length} case(s) failed: {failed.map((o) => o.c.id).join(", ")}. See highlighted rows below.</p>}
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {metrics.map((m) => {
@@ -104,7 +104,7 @@ function EvalPage() {
         </>
       )}
 
-      <div className="overflow-auto rounded-lg border border-border bg-card">
+      <details><summary className="cursor-pointer py-3 font-medium">Detailed checks &amp; processing evidence</summary><div className="overflow-auto rounded-lg border border-border bg-card">
         <table className="w-full text-xs">
           <thead className="bg-muted"><tr>{["ID", "Category", "Question", "Expected", "Actual", "Decision", "Semantic answer", "Warnings", "Join radar", "Join status", "Security", "Inference used", "Mode", "Provider", "Model", "Error code", "Overall", "ms"].map((h) => <th key={h} className="px-2 py-1.5 text-left font-medium">{h}</th>)}</tr></thead>
           <tbody>{cases.map((c) => {
@@ -141,7 +141,7 @@ function EvalPage() {
             );
           })}</tbody>
         </table>
-      </div>
+      </div></details>
     </div>
   );
 }

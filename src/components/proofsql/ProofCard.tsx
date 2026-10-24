@@ -4,6 +4,7 @@ import { isAnswer, type RunResult } from "@/lib/proofsql/pipeline";
 import { download, toCsv, toJson, toMarkdown } from "@/lib/proofsql/exporters";
 import { Button } from "@/components/ui/button";
 import { CheckBadge, DecisionBadge, JoinBadge } from "./badges";
+import { columnLabel, displayValue, simpleAnswer } from "@/lib/proofsql/presentation";
 
 export function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -28,11 +29,11 @@ export function ResultTable({ run, max = 50 }: { run: RunResult; max?: number })
   return (
     <div className="overflow-auto rounded border border-border">
       <table className="w-full text-xs">
-        <thead className="bg-muted"><tr>{columns.map((c) => <th key={c} className="px-2 py-1.5 text-left font-mono font-medium">{c}</th>)}</tr></thead>
+        <thead className="bg-muted"><tr>{columns.map((c) => <th key={c} className="px-3 py-3 text-left font-medium">{columnLabel(c)}</th>)}</tr></thead>
         <tbody>
           {rows.slice(0, max).map((r, i) => (
             <tr key={i} className="border-t border-border">
-              {columns.map((c) => <td key={c} className="px-2 py-1 font-mono">{r[c] == null ? <span className="text-warning-foreground">NULL</span> : String(r[c])}</td>)}
+              {columns.map((c) => <td key={c} className="px-3 py-3 tabular-nums">{displayValue(r[c])}</td>)}
             </tr>
           ))}
         </tbody>
@@ -64,15 +65,15 @@ export function ProofCard({ run, onAsk }: { run: RunResult; onAsk?: (question: s
             <ArrowDown className="h-3 w-3" aria-hidden /> Jump to evidence
           </Button>
         </div>
-        <p className="mt-2 font-medium leading-snug">{run.summary || run.error}</p>
-        <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+        <p className="mt-2 font-medium leading-relaxed">{simpleAnswer(run)}</p>
+        <details className="mt-3"><summary className="cursor-pointer text-xs text-muted-foreground">Processing details</summary><dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
           <dt>Inference</dt><dd className="text-foreground">{inferenceLabel(run)}</dd>
           <dt>Model</dt><dd className="truncate font-mono">{run.liveInference ? run.modelName : "none used"}</dd>
           <dt>Snapshot</dt><dd className="font-mono">{run.snapshotId}</dd>
           <dt>Contract</dt><dd>{run.definitions.length ? run.definitions.map((d) => `${d.title} v${d.version}`).join(", ") : "—"}</dd>
           <dt>Time</dt><dd className="font-mono">{run.executionMs != null ? `SQL ${run.executionMs} ms` : "SQL not executed"}{run.latencyMs != null ? ` · total ${run.latencyMs} ms` : ""}</dd>
           <dt>Run</dt><dd className="truncate font-mono">{run.id}</dd>
-        </dl>
+        </dl></details>
       </div>
       <div className="mb-3 flex flex-wrap gap-1.5">
         <Button size="sm" variant="outline" onClick={() => download(`${slug}.json`, toJson(run), "application/json")}><Download className="h-3 w-3" /> JSON</Button>
@@ -88,7 +89,7 @@ export function ProofCard({ run, onAsk }: { run: RunResult; onAsk?: (question: s
         <p><span className="text-muted-foreground">Original:</span> {run.question}</p>
         <p><span className="text-muted-foreground">Resolved:</span> {run.resolvedQuestion}</p>
       </Section>
-      <Section title="Provenance">
+      <details><summary className="cursor-pointer border-t border-border py-3 font-medium">Technical evidence &amp; model details</summary><Section title="Provenance">
         <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs [&_dd]:break-words">
           <dt className="text-muted-foreground">Dataset</dt><dd>{run.datasetName}</dd>
           <dt className="text-muted-foreground">Snapshot</dt><dd className="font-mono">{run.snapshotId}</dd>
@@ -120,8 +121,11 @@ export function ProofCard({ run, onAsk }: { run: RunResult; onAsk?: (question: s
           <p className="mt-1 font-mono text-[11px] text-muted-foreground">Bound parameters: {JSON.stringify(run.params)}</p>
         </Section>
       )}
+      </details>
+      <details><summary className="cursor-pointer border-t border-border py-3 font-medium">How the figures were interpreted</summary>
       {run.assumptions.length > 0 && <Section title="Assumptions"><ul className="list-disc space-y-0.5 pl-4 text-xs">{run.assumptions.map((a) => <li key={a}>{a}</li>)}</ul></Section>}
       {run.normalizationRules.length > 0 && <Section title="Normalization rules"><ul className="list-disc space-y-0.5 pl-4 font-mono text-[11px]">{run.normalizationRules.map((a) => <li key={a}>{a}</li>)}</ul></Section>}
+      </details>
       {run.evidence.length > 0 && (
         <Section title="Evidence & data-quality warnings">
           <ul className="space-y-1.5">{run.evidence.map((e, i) => <li key={i} className="flex gap-2 text-xs"><CheckBadge state={e.state} /><span>{e.detail}</span></li>)}</ul>
@@ -138,9 +142,10 @@ export function ProofCard({ run, onAsk }: { run: RunResult; onAsk?: (question: s
         <Section title="Blocked reasons"><ul className="list-disc pl-4 text-xs text-destructive">{run.blockedReasons.map((b) => <li key={b}>{b}</li>)}</ul></Section>
       )}
       <div id={evidenceId} />
-      <Section title="Validation checks">
+      <details><summary className="cursor-pointer border-t border-border py-3 font-medium">Safety checks</summary><Section title="Validation checks">
         <ul className="space-y-1.5">{run.checks.map((c, i) => <li key={i} className="flex gap-2 text-xs"><CheckBadge state={c.state} /><span><span className="font-medium">{c.name}</span> — {c.detail}</span></li>)}</ul>
       </Section>
+      </details>
       {onAsk && <Section title="Follow-up questions"><div className="flex flex-col gap-2">{(run.suggestions.length ? run.suggestions : run.datasetName.includes("COVID") ? [
         { label: "Compare Brazil deaths: January → June 2021", question: "Change in deaths in Brazil from January 2021 to June 2021" },
         { label: "Top countries: June 2021", question: "Top 5 countries by confirmed cases in June 2021" },

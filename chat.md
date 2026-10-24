@@ -149,3 +149,13 @@ _Last updated: 2026-10-24_
 - Modified: app provider/shell, Ask/Health/Contract/Evaluation/Settings and head metadata on History/Run routes; COVID compiler/pipeline; school pipeline/error codes; ProofCard; new COVID views/evaluation, worker/executor, permissions/server functions/account/shared-approval controls, Part 2 tests; AGENTS.md, roadmap.md, chat.md and generated backend migration/types.
 - Full arbitrary renamed-table mapping and own-data querying remain pending the actual education file and explicit column/metric definitions. Role checks await a real signed-in account assigned a role.
 - Final checks: 52 tests passed; latest preview build OK. Browser verified COVID Health (5,544 measured rows), Contract, Proof Card follow-up execution and evidence jump. Role sign-in/approval is not end-to-end verified because no account exists.
+
+## 2026-10-24 — context5728.txt: COVID-first plain-language presentation
+- Request: refresh the UI, remove mode/model clutter, emphasize real COVID data and explain results simply. Changed presentation only; analytical pipelines, modes, model selection and safety rules preserved.
+- Replaced the dark navigation with a light teal-accented shared design; simplified navigation labels and widened the main question/answer layout. COVID remains primary; school is explicitly a synthetic example, not mislabeled as real data.
+- Model/mode disclosures retained in Settings, exports and expandable technical evidence. Everyday headings no longer show live/scripted or model identity. Accuracy details remain available, including genuine failures.
+- Answers and table values now use readable labels, formatted numbers/months, and plain sentences derived from recorded rows. Missing remains not reported. Source date and warnings remain visible.
+- Diagnostic check: src/lib/utils.ts contains only cn; no userData reference exists anywhere under src. No matching TS2551 was reproduced; no speculative DOM workaround added.
+- Verification: 52 existing tests passed; browser answered India December 2021 deaths as 481,486 from the COVID data, all seven other pages rendered without runtime errors, and a 390px screen had no horizontal page overflow. Latest observed preview build OK.
+- Files modified: global styles, AppShell, Ask route, ProofCard, badges, COVID views/explorer, Evaluation and History presentation; new presentation helper; AGENTS.md, roadmap.md, project presentation memory and chat.md. No server/database changes.
+- Remaining blockers from previous task unchanged: real education upload/schema and a role-assigned account for authenticated verification.

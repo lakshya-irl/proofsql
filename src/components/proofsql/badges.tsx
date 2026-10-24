@@ -13,7 +13,8 @@ const decisionStyle: Record<Decision, string> = {
 };
 
 export function DecisionBadge({ decision, className }: { decision: Decision; className?: string }) {
-  return <span className={cn("inline-flex items-center rounded px-2 py-0.5 font-mono text-xs font-semibold tracking-wider", decisionStyle[decision], className)}>{decision}</span>;
+  const label = { ANSWER: "Answer available", ANSWER_WITH_WARNING: "Answer with a note", CLARIFY: "More detail needed", ABSTAIN: "Not enough evidence", BLOCKED: "Request not allowed", ERROR: "Could not complete" }[decision];
+  return <span className={cn("inline-flex items-center rounded px-2 py-1 text-xs font-semibold", decisionStyle[decision], className)}>{label}</span>;
 }
 
 const checkStyle: Record<CheckState, string> = {

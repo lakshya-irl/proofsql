@@ -31,7 +31,7 @@ const FILTERS: { label: string; match: Decision[] }[] = [
   { label: "ERROR", match: ["ERROR"] },
 ];
 
-const modeLabel = (r: RunResult) => (r.liveInference ? `live · ${r.modelName}` : r.mode === "live" ? "deterministic guard" : "scripted");
+const modeLabel = (r: RunResult) => r.datasetName;
 const contractLabel = (r: RunResult) => r.definitions.map((d) => `${d.title} v${d.version}`).join(", ") || "—";
 
 function SkippedList({ title, skipped }: { title: string; skipped: Skipped[] }) {
@@ -69,7 +69,7 @@ function HistoryPage() {
     <div className="space-y-4">
       <div className="grid gap-3 sm:flex sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-xl font-semibold">Run History</h1>
+          <h1 className="text-xl font-semibold">Past questions</h1>
           <p className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-0.5 text-xs text-muted-foreground"><HardDrive className="h-3.5 w-3.5" aria-hidden /> Local to this browser — not synced, not on a server</p>
           <p className="mt-1 text-sm text-muted-foreground">Runs are snapshots: later definition edits never change them. Keeps the newest 100.</p>
         </div>
@@ -109,7 +109,7 @@ function HistoryPage() {
           </ul>
           <div className="hidden overflow-auto rounded-lg border border-border bg-card md:block">
             <table className="w-full text-xs">
-              <thead className="bg-muted"><tr>{["Run ID", "Time", "Question", "Decision", "Result", "SQL", "Warnings", "Contract", "Snapshot", "Mode / model", "Latency", ""].map((h) => <th key={h} className="px-2 py-1.5 text-left font-medium">{h}</th>)}</tr></thead>
+              <thead className="bg-muted"><tr>{["Run ID", "Time", "Question", "Decision", "Result", "SQL", "Warnings", "Contract", "Snapshot", "Data source", "Latency", ""].map((h) => <th key={h} className="px-2 py-1.5 text-left font-medium">{h}</th>)}</tr></thead>
               <tbody>{shown.map((r) => (
                 <tr key={r.id} className="border-t border-border align-top hover:bg-muted/40">
                   <td className="px-2 py-1.5 font-mono text-[10px]">{r.id}</td>
