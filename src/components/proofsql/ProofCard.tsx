@@ -79,7 +79,7 @@ export function ProofCard({ run }: { run: RunResult }) {
           <dt className="text-muted-foreground">Columns</dt><dd className="font-mono">{run.columns.join(", ") || "—"}</dd>
           <dt className="text-muted-foreground">Joins</dt><dd className="font-mono text-[11px]">{run.joins.length ? run.joins.map((j) => JSON.stringify(j)).join("; ") : "—"}</dd>
           <dt className="text-muted-foreground">Join safety</dt><dd className="flex flex-wrap gap-1">{run.radar ? <><JoinBadge status={run.radar.status} />{run.joinStatus && run.joinStatus !== run.radar.status && <JoinBadge status={run.joinStatus} />}</> : <JoinBadge status="NOT_CHECKED" />}</dd>
-          <dt className="text-muted-foreground">SQL safety</dt><dd>{(() => { const fw = run.checks.filter((c) => /firewall|statement|read-only|Tables|Columns|Functions/i.test(c.name)); if (!fw.length) return <CheckBadge state="NOT CHECKED" />; return <CheckBadge state={fw.some((c) => c.state === "FAIL") ? "FAIL" : fw.some((c) => c.state === "WARNING") ? "WARNING" : "PASS"} />; })()}</dd>
+          <dt className="text-muted-foreground">SQL safety</dt><dd>{(() => { const fw = run.checks.filter((c) => /firewall|parsed|statement|read-only|tables|columns|function/i.test(c.name)); if (!fw.length) return <CheckBadge state="NOT CHECKED" />; return <CheckBadge state={fw.some((c) => c.state === "FAIL") ? "FAIL" : fw.some((c) => c.state === "WARNING") ? "WARNING" : "PASS"} />; })()}</dd>
           <dt className="text-muted-foreground">Exec time</dt><dd>{run.executionMs != null ? `${run.executionMs} ms` : "—"}{run.latencyMs != null ? ` · total ${run.latencyMs} ms` : ""}</dd>
         </dl>
       </Section>
