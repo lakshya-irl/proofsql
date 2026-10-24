@@ -129,3 +129,9 @@ _Last updated: 2026-10-24_
 ## 2026-10-24 — COVID-19 dataset
 - Added real COVID-19 data (JHU CSSE via github.com/datasets/covid-19), monthly per country, new COVID-19 data page; school demo kept.
 - 2026-10-24: COVID page got a free-text "Ask AI" box (model maps to a menu question as JSON; unmappable → CLARIFY). Health/Contract/Proof Card for user dataset waits on the dataset upload.
+
+## 2026-10-24 — Remix setup (Lakshya Khatri)
+- Requested replacement of MODEL_API_KEY, MODEL_BASE_URL, MODEL_MAX_PARAMETERS and MODEL_NAME. The secure replacement form was rejected; none of these values was updated in this task.
+- Cleared the copied 0000_public_datasets SQL migration and its snapshot; rescaffolded an empty PostgreSQL v7 migration journal. Left drizzle/schema.ts and drizzle.config.ts unchanged.
+- This resets only source migration history; no database statements ran and no stored data or existing tables were deleted. Upload schema/storage availability in the new backend remains unverified.
+- Existing provider selection still prioritizes LOVABLE_API_KEY over MODEL_* when present; no provider behavior was changed.
