@@ -1,94 +1,120 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
-import { Loader2, Play } from "lucide-react";
+import { Fragment, useState } from "react";
+import { Loader2, Play, RotateCcw } from "lucide-react";
 import { useApp } from "@/components/proofsql/AppProvider";
 import { Button } from "@/components/ui/button";
-import { CheckBadge, DecisionBadge } from "@/components/proofsql/badges";
-import { EVAL_CASES, runEvaluation, type EvalOutcome } from "@/lib/proofsql/evaluation";
-import { current } from "@/lib/proofsql/contract";
+import { CheckBadge, DecisionBadge, JoinBadge } from "@/components/proofsql/badges";
+import { EVAL_CASES, runEvaluation, summarize, type EvalOutcome } from "@/lib/proofsql/evaluation";
+import { DEFAULT_CONTRACT, current } from "@/lib/proofsql/contract";
 import { FIXTURE_VERSION } from "@/lib/proofsql/schema";
+import { SqlBlock } from "@/components/proofsql/ProofCard";
 
 export const Route = createFileRoute("/evaluation")({
   head: () => ({
     meta: [
       { title: "Evaluation Lab — ProofSQL" },
-      { name: "description", content: "Twelve evaluation cases measured live: correct answers, clarifications, abstentions, join-risk detection and blocks." },
+      { name: "description", content: "Thirteen evaluation cases measured live: semantic answer correctness, clarifications, value grounding, abstentions, join-risk detection and blocks." },
       { property: "og:title", content: "Evaluation Lab — ProofSQL" },
-      { property: "og:description", content: "Measured results with numerators and denominators, not claims." },
+      { property: "og:description", content: "Measured results computed from the detailed rows, not claims." },
     ],
   }),
   component: EvalPage,
 });
 
+const flag = (v: boolean | null) => (v === null ? <span className="text-muted-foreground">n/a</span> : <CheckBadge state={v ? "PASS" : "FAIL"} />);
+
 function EvalPage() {
-  const { db, contract, mode, model, modelStatusLabel, livePlanner } = useApp();
+  const { db, contract, mode, model, modelStatusLabel, livePlanner, prepareDemo, preparing } = useApp();
   const [res, setRes] = useState<EvalOutcome[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [ranAt, setRanAt] = useState<string | null>(null);
   const drafts = (["enrolment", "payment_total", "academic_year"] as const).filter((k) => current(contract, k).status !== "APPROVED");
   const liveBlocked = mode === "live" && !livePlanner;
 
-  const run = async () => {
+  const run = async (useBaseline = false) => {
     if (!db) return;
     setBusy(true);
     try {
-      setRes(await runEvaluation({ db, contract, mode, modelName: model?.modelName ?? "Qwen/Qwen2.5-Coder-7B-Instruct", modelStatus: modelStatusLabel, livePlanner }));
+      setRes(await runEvaluation({ db, contract: useBaseline ? DEFAULT_CONTRACT() : contract, mode, modelName: model?.modelName ?? "Qwen/Qwen2.5-Coder-7B-Instruct", modelStatus: modelStatusLabel, livePlanner }));
       setRanAt(new Date().toISOString());
     } finally { setBusy(false); }
   };
+  const resetAndRun = async () => {
+    setRes(null);
+    await prepareDemo(false);
+    await run(true);
+  };
 
-  const metric = (label: string, cases: EvalOutcome[], ok: (o: EvalOutcome) => boolean) => ({ label, num: cases.filter(ok).length, den: cases.length });
-  const metrics = res ? [
-    metric("Answer correctness (matches reference SQL)", res.filter((o) => o.c.reference), (o) => o.answerOk === true),
-    metric("Correct clarification", res.filter((o) => o.c.category === "clarification"), (o) => o.decisionOk),
-    metric("Correct abstention", res.filter((o) => o.c.category === "abstention"), (o) => o.decisionOk),
-    metric("Join-risk detection", res.filter((o) => o.c.expectJoinRisk), (o) => o.joinOk === true),
-    metric("Security block", res.filter((o) => o.c.category === "blocked"), (o) => o.decisionOk),
-    metric("Wrong-answer rate (ANSWER given when not expected, or incorrect)", res, (o) => (o.run.decision === "ANSWER" && o.c.expected !== "ANSWER") || o.answerOk === false),
-  ] : [];
+  const metrics = res ? summarize(res) : [];
+  const failed = res?.filter((o) => !o.passed) ?? [];
+  const targetMet = res && failed.length === 0 && res.length === EVAL_CASES.length;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start gap-3">
         <div>
           <h1 className="text-xl font-semibold">Evaluation Lab</h1>
-          <p className="text-sm text-muted-foreground">{EVAL_CASES.length} cases run through the full pipeline against fixture <span className="font-mono">{FIXTURE_VERSION}</span>. A small local fixture does not prove generalization.</p>
+          <p className="text-sm text-muted-foreground">{EVAL_CASES.length} cases run through the full pipeline. Mode <span className="font-medium">{mode}</span> · fixture <span className="font-mono">{FIXTURE_VERSION}</span>. A small local fixture does not prove generalization.</p>
         </div>
-        <Button className="ml-auto" onClick={run} disabled={!db || busy || liveBlocked}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} Run evaluation</Button>
+        <div className="ml-auto flex flex-wrap gap-2">
+          <Button variant="outline" onClick={resetAndRun} disabled={busy || preparing || liveBlocked}>{preparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />} Reset and prepare evaluation</Button>
+          <Button onClick={() => run()} disabled={!db || busy || liveBlocked}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} Run evaluation</Button>
+        </div>
       </div>
       {mode === "scripted" && <p className="rounded border border-warning bg-warning-soft p-2 text-xs text-warning-foreground">Scripted planner — no live model inference. These results measure the validation pipeline with scripted plans and are not live-model accuracy.</p>}
       {liveBlocked && <p className="text-xs text-destructive">Live mode is selected but the model endpoint is not connected.</p>}
-      {drafts.length > 0 && <p className="text-xs text-warning-foreground">Draft definitions ({drafts.join(", ")}) will make governed answer cases return CLARIFY. Approve them in Semantic Contract to evaluate answers.</p>}
+      {drafts.length > 0 && <p className="text-xs text-warning-foreground">Draft definitions ({drafts.join(", ")}) make governed answer cases return CLARIFY. Use "Reset and prepare evaluation" to restore the approved baseline.</p>}
 
       {res && (
         <>
           <div className="text-xs text-muted-foreground">Planner: {modelStatusLabel} · Model: <span className="font-mono">{model?.modelName}</span> · Run at {ranAt && new Date(ranAt).toLocaleString()} · Average latency {Math.round(res.reduce((a, o) => a + o.ms, 0) / res.length)} ms</div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {metrics.map((m) => (
-              <div key={m.label} className="rounded-lg border border-border bg-card p-3">
-                <div className="text-2xl font-semibold tabular-nums">{m.num}/{m.den}</div>
-                <div className="text-xs text-muted-foreground">{m.label}</div>
-              </div>
-            ))}
+          {targetMet
+            ? <p className="rounded border border-success bg-success-soft p-2 text-xs text-success">All {res.length} cases passed: 3/3 answerable, 4/4 clarification (incl. value grounding), 3/3 abstention, 2/2 join-risk detected, 1/1 security block, 0 unsupported answers.</p>
+            : <p className="rounded border border-destructive bg-destructive-soft p-2 text-xs text-destructive">{failed.length} case(s) failed: {failed.map((o) => o.c.id).join(", ")}. See highlighted rows below.</p>}
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {metrics.map((m) => {
+              const bad = m.failing.length > 0;
+              return (
+                <div key={m.label} className={`rounded-lg border p-3 ${bad ? "border-destructive bg-destructive-soft" : "border-border bg-card"}`}>
+                  <div className="text-2xl font-semibold tabular-nums">{m.num}/{m.den}</div>
+                  <div className="text-xs text-muted-foreground">{m.label}</div>
+                  <div className="mt-1 font-mono text-[10px] text-muted-foreground">{bad ? `${m.invert ? "Wrong" : "Failing"}: ${m.failing.join(", ")}` : `Rows: ${m.ids.length > 6 ? "all" : m.ids.join(", ")}`}</div>
+                </div>
+              );
+            })}
           </div>
         </>
       )}
 
       <div className="overflow-auto rounded-lg border border-border bg-card">
         <table className="w-full text-xs">
-          <thead className="bg-muted"><tr>{["ID", "Category", "Question", "Expected", "Actual", "Decision", "Answer check", "Join radar", "ms"].map((h) => <th key={h} className="px-2 py-1.5 text-left font-medium">{h}</th>)}</tr></thead>
+          <thead className="bg-muted"><tr>{["ID", "Category", "Question", "Expected", "Actual", "Decision", "Semantic answer", "Warnings", "Join radar", "Join status", "Security", "Overall", "ms"].map((h) => <th key={h} className="px-2 py-1.5 text-left font-medium">{h}</th>)}</tr></thead>
           <tbody>{EVAL_CASES.map((c) => {
             const o = res?.find((x) => x.c.id === c.id);
             return (
-              <tr key={c.id} className="border-t border-border">
-                <td className="px-2 py-1.5 font-mono">{c.id}</td><td className="px-2 py-1.5">{c.category}</td><td className="max-w-sm px-2 py-1.5">{c.question}</td>
-                <td className="px-2 py-1.5"><DecisionBadge decision={c.expected} /></td>
-                <td className="px-2 py-1.5">{o ? <DecisionBadge decision={o.run.decision} /> : "—"}</td>
-                <td className="px-2 py-1.5">{o ? <CheckBadge state={o.decisionOk ? "PASS" : "FAIL"} /> : <CheckBadge state="NOT CHECKED" />}</td>
-                <td className="px-2 py-1.5">{o && o.answerOk !== null ? <CheckBadge state={o.answerOk ? "PASS" : "FAIL"} /> : <span className="text-muted-foreground">n/a</span>}</td>
-                <td className="px-2 py-1.5">{o?.run.radar ? <CheckBadge state={o.run.radar.state} /> : <span className="text-muted-foreground">n/a</span>}</td>
-                <td className="px-2 py-1.5 font-mono">{o?.ms ?? "—"}</td>
-              </tr>
+              <Fragment key={c.id}>
+                <tr className={`border-t border-border ${o && !o.passed ? "bg-destructive-soft" : ""}`}>
+                  <td className="px-2 py-1.5 font-mono">{c.id}</td><td className="px-2 py-1.5">{c.category}</td><td className="max-w-sm px-2 py-1.5">{c.question}</td>
+                  <td className="px-2 py-1.5"><div className="flex flex-col gap-1">{c.expected.map((d) => <DecisionBadge key={d} decision={d} />)}</div></td>
+                  <td className="px-2 py-1.5">{o ? <DecisionBadge decision={o.run.decision} /> : "—"}</td>
+                  <td className="px-2 py-1.5">{o ? <CheckBadge state={o.decisionOk ? "PASS" : "FAIL"} /> : <CheckBadge state="NOT CHECKED" />}</td>
+                  <td className="px-2 py-1.5">{o ? flag(o.answerOk) : "—"}</td>
+                  <td className="px-2 py-1.5">{o ? flag(o.warningsOk) : "—"}</td>
+                  <td className="px-2 py-1.5">{o ? flag(o.joinOk) : "—"}</td>
+                  <td className="px-2 py-1.5">{o?.run.radar ? <div className="flex flex-col gap-1"><JoinBadge status={o.run.radar.status} />{o.run.joinStatus && o.run.joinStatus !== o.run.radar.status && <JoinBadge status={o.run.joinStatus} />}</div> : <span className="text-muted-foreground">n/a</span>}</td>
+                  <td className="px-2 py-1.5">{o ? flag(o.securityOk) : "—"}</td>
+                  <td className="px-2 py-1.5">{o ? <CheckBadge state={o.passed ? "PASS" : "FAIL"} /> : "—"}</td>
+                  <td className="px-2 py-1.5 font-mono">{o?.ms ?? "—"}</td>
+                </tr>
+                {(c.reference || c.expectedWarnings) && (
+                  <tr className="border-t border-border/50"><td colSpan={13} className="px-2 pb-2">
+                    <details>
+                      <summary className="cursor-pointer text-[11px] text-muted-foreground">Debugging trace{c.expectedWarnings ? ` · expected warnings: ${c.expectedWarnings.join(", ")}` : ""}</summary>
+                      {c.reference && <div className="mt-1"><p className="mb-1 text-[11px] text-muted-foreground">Reference SQL (debugging only — correctness compares normalized result rows on columns {c.compare?.join(", ")}):</p><SqlBlock sql={c.reference} /></div>}
+                    </details>
+                  </td></tr>
+                )}
+              </Fragment>
             );
           })}</tbody>
         </table>
