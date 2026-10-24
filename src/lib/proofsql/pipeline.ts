@@ -58,7 +58,7 @@ export type PipelineInput = {
   question: string; mode: Mode; contract: Contract; db: Database;
   modelName: string; modelStatus: string;
   livePlanner?: ((req: LiveRequest) => Promise<LiveResponse>) | undefined;
-  execute?: QueryExecutor; signal?: AbortSignal;
+  execute?: QueryExecutor; signal?: AbortSignal | undefined;
 };
 
 const uid = () => `run_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
