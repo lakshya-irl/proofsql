@@ -9,11 +9,11 @@ test("csv parser handles quotes and CRLF", () => {
 test("empty CSV cells become NULL, never zero, and duplicates are counted", async () => {
   const SQL = await initSqlJs();
   const db = csvToDb(SQL, "school,enrolment\nA,10\nB,\nA,10\n", "t");
-  const [p] = profileDb(db);
+  const p = profileDb(db)[0]!;
   expect(p.rows).toBe(3);
   expect(p.duplicateRows).toBe(1);
   expect(p.columns.find((c) => c.name === "enrolment")!.nulls).toBe(1);
-  expect(db.exec("SELECT COUNT(*) FROM t WHERE enrolment = '0'")[0].values[0][0]).toBe(0);
+  expect(db.exec("SELECT COUNT(*) FROM t WHERE enrolment = '0'")[0]?.values[0]?.[0]).toBe(0);
 });
 
 test("file types", () => {

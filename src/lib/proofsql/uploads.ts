@@ -44,7 +44,7 @@ export function csvToDb(SQL: SqlJsStatic, text: string, table: string): Database
   const rows = parseCsv(text);
   if (rows.length < 1) throw new Error("CSV is empty.");
   const seen = new Set<string>();
-  const cols = rows[0].map((h, i) => {
+  const cols = rows[0]!.map((h, i) => {
     let c = safeIdent(h, `col_${i + 1}`);
     while (seen.has(c)) c = `${c}_${i + 1}`;
     seen.add(c);

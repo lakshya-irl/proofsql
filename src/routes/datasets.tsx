@@ -48,8 +48,8 @@ function DatasetsPage() {
 
   async function upload(file: File) {
     const kind = kindOf(file.name);
-    if (!kind) return toast.error("Only .csv, .sqlite/.db or .sql files are supported.");
-    if (file.size === 0 || file.size > MAX) return toast.error("File must be between 1 byte and 20 MB.");
+    if (!kind) { toast.error("Only .csv, .sqlite/.db or .sql files are supported."); return; }
+    if (file.size === 0 || file.size > MAX) { toast.error("File must be between 1 byte and 20 MB."); return; }
     setBusy(true);
     try {
       // Validate locally before storing: the file must actually open.
