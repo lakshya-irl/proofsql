@@ -1,4 +1,6 @@
 # Current task
+- [ ] Refresh shared design and COVID-first question/results screens; simplify visible technical labels without hiding provenance.
+- [ ] Check reported userData diagnostic, run tests, verify results on desktop and mobile, update chat.md.
 - [x] Connect COVID / School selection to Ask & Verify, Health, Contract and Evaluation.
 - [x] Add real COVID evaluations, inference reporting and browser verification.
 - [x] Extend Proof Card safeguards, attack tests, follow-ups, schema-change clarification and final SQL stopping.
