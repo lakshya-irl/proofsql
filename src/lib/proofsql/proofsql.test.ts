@@ -91,7 +91,9 @@ describe("ProofSQL acceptance rules", () => {
   it("'Show schools in Jaipur' asks the user to choose among JPR, JPU and JPD", async () => {
     const r = await ask("Show schools in Jaipur");
     expect(r.decision).toBe("CLARIFY");
-    expect(r.suggestions.map((s) => s.question)).toContain("Show schools in district codes JPR JPU JPD");
+    const allQ = r.suggestions.find((s) => s.question.includes("district codes"))!.question;
+    expect(allQ.split(" ").slice(-3).sort()).toEqual(["JPD", "JPR", "JPU"]);
+    expect(r.suggestions.length).toBe(4);
     const all = await ask("Show schools in district codes JPR JPU JPD");
     expect(all.decision).toBe("ANSWER");
     expect(all.params).toEqual(["JPR", "JPU", "JPD"]);
