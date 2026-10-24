@@ -81,7 +81,7 @@ const yearEvidence = (yearsSql: string): EvidenceQuery[] => ([
   { label: "_", sql: yearsSql, message: () => "", warnWhenPositive: false },
 ] as EvidenceQuery[]).filter((e) => e.label !== "_");
 
-function enrolmentComparison(direction: "decrease" | "increase", q: string): ScriptedCase {
+export function enrolmentComparison(direction: "decrease" | "increase", q: string): ScriptedCase {
   const op = direction === "decrease" ? "<" : ">";
   const sql = `${ENROL_CTES} SELECT s.school_id, s.school_name, cmp.y1 AS students_2023_24, cmp.y2 AS students_2024_25, cmp.y2 - cmp.y1 AS delta FROM cmp JOIN schools s ON s.school_id = cmp.school_id WHERE cmp.y1 IS NOT NULL AND cmp.y2 IS NOT NULL AND cmp.y2 ${op} cmp.y1 ORDER BY delta${direction === "increase" ? " DESC" : ""}`;
   return {
