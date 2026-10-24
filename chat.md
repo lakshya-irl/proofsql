@@ -114,3 +114,9 @@ _Last updated: 2026-10-24_
 - Error handling: page-level error boundary (one broken page no longer blanks the app, with Try again / Reload), toast for any unhandled async failure, Ask & Verify catches failed questions (toast, nothing executed, no stale Proof Card). Messages are scrubbed of keys/tokens.
 - Colours moved to the logo's blue; visible keyboard focus everywhere; no sideways page scrolling.
 - Checked: all 6 pages load with no errors; 32 tests pass. Full visual redesign of every page not done yet.
+
+## 2026-10-24 — P1: Proof Card header, Run History export/import, mobile (context4762.txt)
+- Proof Card: sticky summary header (decision, confidence, warnings, summary, inference label, model only when live inference was used, snapshot, contract versions, timings, run ID) + Jump to evidence; new result opens at the top; BLOCKED shows "SQL withheld", ERROR shows code and "no rows". Provenance no longer shows a model name for scripted/guard runs.
+- Run History: "Local to this browser" label, Export all (JSON), Import JSON (validated; skipped records listed with reasons; duplicates ignored; imported BLOCKED runs lose any SQL), Clear, legacy key migration (proofsql.runs.v1 / proofsql.runs) with skipped report, card list on phones.
+- Verified in browser: live question "decrease in distinct active students 2023-24 → 2024-25" → ANSWER, 3 schools, google/gemini-3-flash-preview, compiled SQL with bound params, assumptions, rows. No sideways scrolling at 320 and 768 on Ask & Verify and Run History. 38 tests pass (6 new).
+- Not done: P2; query cancellation NOT CHECKED; import from file not browser-tested (unit tests only).
