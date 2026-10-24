@@ -227,6 +227,7 @@ export function scriptedPlan(question: string): ScriptedCase | null {
         sql: district ? REPAIRED_DISTRICT : REPAIRED_SCHOOL, params: [],
         explanation: "Aggregate each one-to-many table to one row per school first, then join the summaries.",
       },
+      summarize: (rows) => `Fan-out detected in the original query; answered with aggregate-before-join SQL (${rows.length} ${district ? "districts" : "schools"}).`,
     };
   }
   if (/count/.test(t) && /school/.test(t) && /district/.test(t)) {
