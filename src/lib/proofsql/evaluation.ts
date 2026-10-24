@@ -33,7 +33,7 @@ export type EvalOutcome = { c: EvalCase; run: RunResult; decisionOk: boolean; an
 
 const canon = (rows: Record<string, unknown>[]) => rows.map((r) => Object.values(r).map((v) => (typeof v === "number" ? Math.round(v * 100) / 100 : v)).join("|")).sort().join("\n");
 
-export async function runEvaluation(opts: { db: Database; contract: Contract; mode: Mode; modelName: string; modelStatus: string; livePlanner?: (q: string) => Promise<string> }): Promise<EvalOutcome[]> {
+export async function runEvaluation(opts: { db: Database; contract: Contract; mode: Mode; modelName: string; modelStatus: string; livePlanner?: ((q: string) => Promise<string>) | undefined }): Promise<EvalOutcome[]> {
   const out: EvalOutcome[] = [];
   for (const c of EVAL_CASES) {
     const t0 = performance.now();

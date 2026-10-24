@@ -20,7 +20,7 @@ export const Route = createFileRoute("/health")({
   component: HealthPage,
 });
 
-function Stat({ label, value, tone }: { label: string; value: string | number; tone?: "warn" | "fail" }) {
+function Stat({ label, value, tone }: { label: string; value: string | number; tone?: "warn" | "fail" | undefined }) {
   return (
     <div className={`rounded-lg border p-3 ${tone === "fail" ? "border-destructive bg-destructive-soft" : tone === "warn" ? "border-warning bg-warning-soft" : "border-border bg-card"}`}>
       <div className="text-2xl font-semibold tabular-nums">{value}</div>

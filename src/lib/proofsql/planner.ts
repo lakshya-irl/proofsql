@@ -65,7 +65,7 @@ const METRIC_SUGGESTIONS: Suggestion[] = [
   { label: "Dropout reduction", question: "Which schools reduced dropout the most?" },
 ];
 
-const yearEvidence = (yearsSql: string): EvidenceQuery[] => [
+const yearEvidence = (yearsSql: string): EvidenceQuery[] => ([
   {
     label: "Academic-year normalization",
     sql: `SELECT COUNT(*) AS n, group_concat(DISTINCT academic_year) AS detail FROM enrolments WHERE academic_year IS NOT NULL AND (${N}) IS NOT NULL AND academic_year <> (${N})`,
@@ -79,7 +79,7 @@ const yearEvidence = (yearsSql: string): EvidenceQuery[] => [
     warnWhenPositive: true,
   },
   { label: "_", sql: yearsSql, message: () => "", warnWhenPositive: false },
-].filter((e) => e.label !== "_");
+] as EvidenceQuery[]).filter((e) => e.label !== "_");
 
 function enrolmentComparison(direction: "decrease" | "increase", q: string): ScriptedCase {
   const op = direction === "decrease" ? "<" : ">";
@@ -103,7 +103,7 @@ function enrolmentComparison(direction: "decrease" | "increase", q: string): Scr
         "Schools missing either year are excluded, not treated as zero.",
       ],
     }),
-    evidence: [
+    evidence: ([
       {
         label: "Schools missing a comparison year",
         sql: `${ENROL_CTES} SELECT COUNT(*) AS n, group_concat(school_id) AS detail FROM cmp WHERE y1 IS NULL OR y2 IS NULL`,
@@ -132,7 +132,7 @@ function enrolmentComparison(direction: "decrease" | "increase", q: string): Scr
         warnWhenPositive: true,
       },
       ...yearEvidence(""),
-    ].filter((e) => e.sql),
+    ] as EvidenceQuery[]).filter((e) => e.sql),
     summarize: (rows) => rows.length
       ? `${rows.length} school${rows.length === 1 ? "" : "s"} had ${direction === "decrease" ? "a decrease" : "an increase"} in distinct active students from ${Y1} to ${Y2}.`
       : `No school with both years present had ${direction === "decrease" ? "a decrease" : "an increase"}.`,

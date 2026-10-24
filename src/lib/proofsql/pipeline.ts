@@ -35,7 +35,7 @@ export const ROW_LIMIT = 200;
 export type PipelineInput = {
   question: string; mode: Mode; contract: Contract; db: Database;
   modelName: string; modelStatus: string;
-  livePlanner?: (question: string) => Promise<string>;
+  livePlanner?: ((question: string) => Promise<string>) | undefined;
 };
 
 const uid = () => `run_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
