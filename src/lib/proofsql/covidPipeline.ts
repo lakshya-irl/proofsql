@@ -28,7 +28,7 @@ export function covidPrecheck(q: string): { decision: "BLOCKED" | "ABSTAIN"; rea
 
 export type CovidInput = {
   question: string; db: Database; countries: string[]; mode: Mode; modelStatus: string;
-  menu?: CovidQuestion; livePlanner?: ((q: string) => Promise<LiveResponse>) | undefined;
+  menu?: CovidQuestion | undefined; livePlanner?: ((q: string) => Promise<LiveResponse>) | undefined;
 };
 
 const uid = () => `run_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
