@@ -17,7 +17,7 @@ export type CovidQuestion =
 
 export type CovidPlan =
   | { decision: "ANSWER"; sql: string; params: (string | number)[]; warnings: string[] }
-  | { decision: "ABSTAIN" | "CLARIFY"; reason: string };
+  | { decision: "ABSTAIN" | "CLARIFY" | "ERROR"; reason: string };
 
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 
@@ -42,4 +42,33 @@ export function planCovid(q: CovidQuestion): CovidPlan {
   }
   return { decision: "ANSWER", warnings: [...warnings, "Change = end-month total minus start-month total."], params: [q.from, q.to, q.country],
     sql: `SELECT a.country, a.${m} AS start_value, b.${m} AS end_value, b.${m} - a.${m} AS change FROM covid_monthly a JOIN covid_monthly b ON b.country = a.country WHERE a.month = ? AND b.month = ? AND a.country = ? LIMIT 1` };
+}
+
+import { z } from "zod";
+const M = z.enum(["confirmed", "deaths", "recovered"]);
+const Mo = z.string().regex(/^\d{4}-\d{2}$/);
+const ModelOut = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("country_month"), country: z.string(), month: Mo, metric: M }).strict(),
+  z.object({ kind: z.literal("top"), month: Mo, metric: M, n: z.number().int() }).strict(),
+  z.object({ kind: z.literal("change"), country: z.string(), metric: M, from: Mo, to: Mo }).strict(),
+  z.object({ kind: z.literal("clarify"), reason: z.string() }).strict(),
+]);
+
+/** Validates the model's JSON; anything malformed, off-menu, or naming an unknown country becomes CLARIFY. */
+export function interpretModelOutput(raw: string, countries: string[]): { question: CovidQuestion | null; plan: CovidPlan } {
+  let parsed: unknown = null;
+  try { parsed = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1)); } catch { /* handled below */ }
+  const r = ModelOut.safeParse(parsed);
+  if (!r.success) return { question: null, plan: { decision: "CLARIFY", reason: "I couldn't map this to a supported question. Ask for a country's total, the top countries, or a change between two months." } };
+  if (r.data.kind === "clarify") return { question: null, plan: { decision: "CLARIFY", reason: r.data.reason } };
+  const q = { ...r.data } as CovidQuestion;
+  if (q.kind !== "top") {
+    const hit = countries.find((c) => c.toLowerCase() === q.country.trim().toLowerCase());
+    if (!hit) {
+      const near = countries.filter((c) => c.toLowerCase().includes(q.country.trim().toLowerCase().slice(0, 4))).slice(0, 5);
+      return { question: null, plan: { decision: "CLARIFY", reason: `"${q.country}" is not a country in this data.${near.length ? ` Did you mean: ${near.join(", ")}?` : ""}` } };
+    }
+    q.country = hit;
+  }
+  return { question: q, plan: planCovid(q) };
 }

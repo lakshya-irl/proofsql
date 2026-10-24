@@ -24,3 +24,11 @@ test("change compares two months and user text is a bound parameter", async () =
   expect(run(db, p.sql, p.params)).toEqual([]);
   expect(planCovid({ kind: "change", country: "India", metric: "deaths", from: "2021-06", to: "2021-01" }).decision).toBe("CLARIFY");
 });
+
+import { interpretModelOutput } from "./covid";
+test("off-menu or malformed model output becomes CLARIFY, never an answer", () => {
+  expect(interpretModelOutput("not json", ["India"]).plan.decision).toBe("CLARIFY");
+  expect(interpretModelOutput('{"kind":"top","month":"2021-01","metric":"vaccinations","n":5}', ["India"]).plan.decision).toBe("CLARIFY");
+  expect(interpretModelOutput('{"kind":"country_month","country":"Atlantis","month":"2021-01","metric":"deaths"}', ["India"]).plan.decision).toBe("CLARIFY");
+  expect(interpretModelOutput('{"kind":"country_month","country":"india","month":"2021-01","metric":"deaths"}', ["India"]).plan.decision).toBe("ANSWER");
+});

@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import type { Database } from "sql.js";
 import { Button } from "@/components/ui/button";
-import { COVID_FILE, COVID_SOURCE, METRICS, planCovid, type CovidPlan, type CovidQuestion, type Metric } from "@/lib/proofsql/covid";
+import { analyzeCovidQuestion } from "@/lib/model.functions";
+import { COVID_FILE, interpretModelOutput, COVID_SOURCE, METRICS, planCovid, type CovidPlan, type CovidQuestion, type Metric } from "@/lib/proofsql/covid";
 
 export const Route = createFileRoute("/covid")({
   head: () => ({
@@ -33,7 +34,28 @@ function CovidPage() {
   const [month, setMonth] = useState("2021-12");
   const [from, setFrom] = useState("2021-01");
   const [n, setN] = useState(10);
-  const [out, setOut] = useState<{ plan: CovidPlan; cols: string[]; rows: unknown[][]; ms: number } | null>(null);
+  const [out, setOut] = useState<{ plan: CovidPlan; cols: string[]; rows: unknown[][]; ms: number; via?: string | undefined } | null>(null);
+  const [text, setText] = useState("");
+  const [thinking, setThinking] = useState(false);
+
+  function show(plan: CovidPlan, via?: string) {
+    if (!db || plan.decision !== "ANSWER") { setOut({ plan, cols: [], rows: [], ms: 0, via }); return; }
+    const t = performance.now();
+    const r = db.exec(plan.sql, plan.params)[0];
+    setOut({ plan, cols: r?.columns ?? [], rows: r?.values ?? [], ms: performance.now() - t, via });
+  }
+
+  async function askText() {
+    if (!text.trim() || thinking) return;
+    setThinking(true); setOut(null);
+    try {
+      const r = await analyzeCovidQuestion({ data: { question: text.trim() } });
+      const { question, plan } = interpretModelOutput(r.content, countries);
+      show(plan, `Live AI · ${r.modelName} · ${r.latencyMs} ms${question ? ` · read as ${JSON.stringify(question)}` : ""}`);
+    } catch (e) {
+      setOut({ plan: { decision: "ERROR", reason: `${e instanceof Error ? e.message : String(e)}. Nothing was answered; try again.` }, cols: [], rows: [], ms: 0 });
+    } finally { setThinking(false); }
+  }
 
   useEffect(() => {
     let d: Database | null = null;
@@ -53,11 +75,7 @@ function CovidPage() {
   function ask() {
     if (!db) return;
     const q: CovidQuestion = kind === "top" ? { kind, month, metric, n } : kind === "change" ? { kind, country, metric, from, to: month } : { kind, country, month, metric };
-    const plan = planCovid(q);
-    if (plan.decision !== "ANSWER") { setOut({ plan, cols: [], rows: [], ms: 0 }); return; }
-    const t = performance.now();
-    const r = db.exec(plan.sql, plan.params)[0];
-    setOut({ plan, cols: r?.columns ?? [], rows: r?.values ?? [], ms: performance.now() - t });
+    show(planCovid(q), "Menu question · no AI used");
   }
 
   const monthSel = (v: string, set: (s: string) => void, label: string) => (
@@ -73,6 +91,14 @@ function CovidPage() {
       {err && <p className="text-sm text-destructive">Could not load the COVID database: {err}</p>}
       {!db && !err && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading database…</p>}
       {db && (
+        <section className="space-y-2 rounded-lg border border-border bg-card p-4">
+          <label className="block text-xs">Ask in your own words (uses the live AI; it only picks a question type, the app writes the SQL)
+            <textarea value={text} onChange={(e) => setText(e.target.value)} maxLength={500} rows={2} className={sel} placeholder="How many deaths did Brazil have by June 2021?" />
+          </label>
+          <Button onClick={() => void askText()} disabled={thinking || !text.trim()}>{thinking ? <><Loader2 className="h-4 w-4 animate-spin" /> Asking the AI…</> : "Ask AI"}</Button>
+        </section>
+      )}
+      {db && (
         <section className="grid gap-3 rounded-lg border border-border bg-card p-4 sm:grid-cols-2">
           <label className="block text-xs">Question<select className={sel} value={kind} onChange={(e) => setKind(e.target.value as Kind)}>
             <option value="country_month">Total for a country in a month</option>
@@ -84,12 +110,13 @@ function CovidPage() {
           {kind === "change" && monthSel(from, setFrom, "From month")}
           {monthSel(month, setMonth, kind === "change" ? "To month" : "Month")}
           {kind === "top" && <label className="block text-xs">How many<input type="number" min={1} max={50} className={sel} value={n} onChange={(e) => setN(Number(e.target.value))} /></label>}
-          <div className="sm:col-span-2"><Button onClick={ask}>Ask</Button></div>
+          <div className="sm:col-span-2"><Button onClick={ask}>Ask menu question</Button></div>
         </section>
       )}
       {out && (
         <section className="space-y-2 rounded-lg border border-border bg-card p-4 text-sm">
           <div className="font-semibold">{out.plan.decision}{out.plan.decision === "ANSWER" && ` · ${out.rows.length} row(s) · ${out.ms.toFixed(1)} ms`}</div>
+          {out.via && <div className="break-all text-xs text-muted-foreground">{out.via}</div>}
           {out.plan.decision !== "ANSWER" ? <p>{out.plan.reason} No query was run.</p> : (
             <>
               {out.rows.length === 0 && <p>No matching rows — nothing was reported for this choice.</p>}

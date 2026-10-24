@@ -128,3 +128,4 @@ _Last updated: 2026-10-24_
 
 ## 2026-10-24 — COVID-19 dataset
 - Added real COVID-19 data (JHU CSSE via github.com/datasets/covid-19), monthly per country, new COVID-19 data page; school demo kept.
+- 2026-10-24: COVID page got a free-text "Ask AI" box (model maps to a menu question as JSON; unmappable → CLARIFY). Health/Contract/Proof Card for user dataset waits on the dataset upload.
