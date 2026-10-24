@@ -73,7 +73,7 @@ function SettingsPage() {
         <div className="grid gap-2 sm:grid-cols-2">
           <button onClick={() => liveReady && setMode("live")} disabled={!liveReady} aria-disabled={!liveReady} className={`rounded-lg border p-3 text-left disabled:cursor-not-allowed disabled:opacity-60 ${mode === "live" ? "border-primary ring-1 ring-primary" : "border-border"}`}>
             <div className="text-sm font-medium">Live model (primary)</div>
-            <div className="text-xs text-muted-foreground">{liveReady ? `Any question goes to ${model?.modelName}; every plan is schema-validated, firewalled and join-checked before execution.` : "Unavailable: model endpoint not connected. Run a health check after configuring it."}</div>
+            <div className="text-xs text-muted-foreground">{liveReady ? `Any question goes to ${model?.modelName}; every plan is schema-validated, firewalled and join-checked before execution.` : checking ? "Checking the model connection… (takes a few seconds)" : model?.error ? `Unavailable: ${model.error} Click "Run health check" to retry.` : "Not checked yet. Click \"Run health check\" above."}</div>
           </button>
           <button onClick={() => setMode("scripted")} className={`rounded-lg border p-3 text-left ${mode === "scripted" ? "border-primary ring-1 ring-primary" : "border-border"}`}>
             <div className="text-sm font-medium">Scripted demo (backup)</div>
