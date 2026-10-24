@@ -1,11 +1,11 @@
 {
-  "version": 1,
   "asset_id": "27b4bbca-9ab6-46e1-b4cd-2905dfb51719",
-  "project_id": "baa7962b-7801-4467-8127-624944cdd405",
-  "url": "/__l5e/assets-v1/27b4bbca-9ab6-46e1-b4cd-2905dfb51719/proofsql-mark.png",
-  "r2_key": "a/v1/baa7962b-7801-4467-8127-624944cdd405/27b4bbca-9ab6-46e1-b4cd-2905dfb51719/proofsql-mark.png",
-  "original_filename": "proofsql-mark.png",
-  "size": 74281,
   "content_type": "image/png",
-  "created_at": "2026-10-24T16:20:57Z"
+  "created_at": "2026-10-24T16:20:57Z",
+  "original_filename": "proofsql-mark.png",
+  "project_id": "3523af15-513a-4591-838d-21d1fa859dd7",
+  "r2_key": "a/v1/3523af15-513a-4591-838d-21d1fa859dd7/27b4bbca-9ab6-46e1-b4cd-2905dfb51719/proofsql-mark.png",
+  "size": 74281,
+  "url": "/__l5e/assets-v1/27b4bbca-9ab6-46e1-b4cd-2905dfb51719/proofsql-mark.png",
+  "version": 1
 }
