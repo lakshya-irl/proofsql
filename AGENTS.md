@@ -14,3 +14,4 @@
 - Model-generated SQL must pass the AST firewall (`src/lib/proofsql/firewall.ts`, node-sql-parser) and the join radar before execution; never add regex-only checks as the boundary.
 - The model is called only through server functions in `src/lib/model.functions.ts` so the key stays server-side; never fall back silently to another model.
 - Core rules are covered by `src/lib/proofsql/proofsql.test.ts`; keep it passing.
+- Evaluation correctness compares normalized result rows (reference SQL is only a trace); summary metrics must be derived from the per-case rows so they can never contradict them.
