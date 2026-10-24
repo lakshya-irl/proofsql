@@ -1,4 +1,3 @@
-// @vitest-environment node
 import initSqlJs, { type Database } from "sql.js";
 import { beforeAll, describe, expect, it } from "vitest";
 import { buildFixtureSql } from "./fixture";
