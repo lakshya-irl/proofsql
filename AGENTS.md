@@ -18,3 +18,4 @@
 - Live mode uses the Lovable AI connection when LOVABLE_API_KEY is set, otherwise the MODEL_* endpoint; the UI always shows the actual model name.
 - Live model output is a strict JSON plan (LivePlanSchema, no SQL) compiled deterministically by compileLivePlan; deterministic precheck runs before any model call. Why: the model must never author executable SQL.
 - Live/scripted status labels come only from the shared PlannerReadiness (src/lib/proofsql/readiness.ts) derived from the health check. Why: pages must never disagree about whether the planner is verified.
+- Uploaded datasets: public `datasets` table + private storage bucket with anon read/insert policies; files are validated by opening them in sql.js before upload. Why: owner wants uploads without sign-in.
