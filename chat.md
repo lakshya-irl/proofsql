@@ -92,3 +92,11 @@ _Last updated: 2026-10-24_
 - Lovable Cloud enabled. Live mode now uses google/gemini-3-flash-preview via Lovable AI; tested: real question answered (5 rows, join SAFE, 1.7 s).
 - The UI shows the real model name. Declined the request to label it as Qwen (that would misstate the model).
 - 2026-10-24: Live is now the primary mode (default when the model answers and no mode was chosen); scripted is the backup. Messy demo DB shared as proofsql-messy-demo.sqlite/.sql. Uploading your own database is not supported yet.
+
+## 2026-10-24 — P0 live planner fix (MARIO GAMERS FF spec)
+- Live model now returns a strict structured plan (no SQL); app compiles it to vetted SQL (src/lib/proofsql/livePlan.ts).
+- Deterministic pre-checks (block / forecast / causal / missing field / clarify / Jaipur grounding) run before the model, labelled "No live model inference".
+- Health check = 3 probes (transport, chat, planner schema); Settings shows each + open-weight FAIL for the hosted Google model ("Fallback provider").
+- Live errors return ERROR with a code (INVALID_JSON, PLAN_SCHEMA_INVALID, UNSUPPORTED_PLAN, …) and a redacted developer trace; blocked runs withhold SQL.
+- Measured in preview: live evaluation 13/13; only A1-A3, J1, J2 used live inference, the other 8 were decided by deterministic guards.
+- Not done yet: P1 (Proof Card header, Run History export/import, mobile checks), P2, query cancellation (NOT CHECKED).

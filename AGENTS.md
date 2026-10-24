@@ -16,3 +16,4 @@
 - Core rules are covered by `src/lib/proofsql/proofsql.test.ts`; keep it passing.
 - Evaluation correctness compares normalized result rows (reference SQL is only a trace); summary metrics must be derived from the per-case rows so they can never contradict them.
 - Live mode uses the Lovable AI connection when LOVABLE_API_KEY is set, otherwise the MODEL_* endpoint; the UI always shows the actual model name.
+- Live model output is a strict JSON plan (LivePlanSchema, no SQL) compiled deterministically by compileLivePlan; deterministic precheck runs before any model call. Why: the model must never author executable SQL.
