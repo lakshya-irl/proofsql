@@ -7,6 +7,7 @@ import { runQuery, type Rows } from "@/lib/proofsql/db";
 import { FIXTURE_MANIFEST } from "@/lib/proofsql/fixture";
 import { DATASET_LABEL, SNAPSHOT_ID } from "@/lib/proofsql/schema";
 import type { HealthWarning } from "@/lib/proofsql/health";
+import { CovidHealthView } from "@/components/proofsql/CovidViews";
 
 export const Route = createFileRoute("/health")({
   head: () => ({
@@ -30,6 +31,11 @@ function Stat({ label, value, tone }: { label: string; value: string | number; t
 }
 
 function HealthPage() {
+  const { dataset } = useApp();
+  return dataset === "covid" ? <CovidHealthView /> : <SchoolHealthPage />;
+}
+
+function SchoolHealthPage() {
   const { health, db, resetDataset, loadedAt } = useApp();
   const [open, setOpen] = useState<{ w: HealthWarning; rows: Rows } | null>(null);
   const [resetting, setResetting] = useState(false);

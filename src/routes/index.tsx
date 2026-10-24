@@ -14,6 +14,8 @@ import { DEMO_QUESTIONS } from "@/lib/proofsql/planner";
 import { isAnswer, type RunResult } from "@/lib/proofsql/pipeline";
 import { toast } from "sonner";
 import { safeMessage } from "@/components/proofsql/ErrorBoundary";
+import { CovidSchema } from "@/components/proofsql/CovidViews";
+import { COVID_CASES } from "@/lib/proofsql/covidEvaluation";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -28,19 +30,23 @@ export const Route = createFileRoute("/")({
 });
 
 function AskPage() {
-  const { ask, db, mode, livePlanner, modelStatusLabel, planner, checking } = useApp();
+  const { ask, db, mode, livePlanner, modelStatusLabel, planner, checking, dataset, covidDb, askCovid } = useApp();
   const [q, setQ] = useState("");
   const [run, setRun] = useState<RunResult | null>(null);
   const [busy, setBusy] = useState(false);
   const liveBlocked = mode === "live" && !livePlanner;
   const proofPane = useRef<HTMLElement>(null);
+  const activeDb = dataset === "covid" ? covidDb : db;
+  const schema = dataset === "covid" ? <CovidSchema /> : <SchemaPanel />;
+  const questions = dataset === "covid" ? COVID_CASES.map((c) => c.question) : DEMO_QUESTIONS;
+  useEffect(() => { setRun(null); setQ(""); }, [dataset]);
   // A new result always opens at its summary header, never mid-way through the previous card.
   useEffect(() => { proofPane.current?.scrollTo({ top: 0 }); }, [run?.id]);
 
   const submit = async (question: string) => {
     if (!question.trim() || busy) return;
     setQ(question); setBusy(true); setRun(null);
-    try { setRun(await ask(question)); }
+    try { setRun(await (dataset === "covid" ? askCovid(question, mode === "scripted" ? COVID_CASES.find((c) => c.question === question)?.menu : undefined) : ask(question))); }
     catch (e) { toast.error("The question could not be checked", { description: `${safeMessage(e)} — nothing was executed. Please try again.` }); }
     finally { setBusy(false); }
   };
@@ -49,34 +55,34 @@ function AskPage() {
     <div className="space-y-4">
       <div className="rounded-lg border border-border bg-card p-4">
         <div className="flex flex-wrap items-center gap-2">
-          <label htmlFor="q" className="text-base font-semibold">Ask a question about the demo database</label>
+          <label htmlFor="q" className="text-base font-semibold">Ask a question · {dataset === "covid" ? "COVID-19" : "School"}</label>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <ModeBadge label={modelStatusLabel} live={mode === "live" && planner.eligibleForLive} />
             <span className="text-[11px] text-muted-foreground">Model: {checking && !planner.lastCheckedAt ? "checking…" : planner.eligibleForLive ? `planner verified (${planner.model})` : planner.transport === "pass" ? `transport only — planner not verified${planner.errorCode ? ` (${planner.errorCode})` : ""}` : "unavailable"}</span>
-            <PrepareDemoButton size="sm" />
+            {dataset === "school" && <PrepareDemoButton size="sm" />}
           </div>
         </div>
         <Textarea id="q" value={q} onChange={(e) => setQ(e.target.value)} rows={2} className="mt-2"
-          placeholder="e.g. Which schools had falling enrolment last year?"
+          placeholder={dataset === "covid" ? "How many deaths did India report in December 2021?" : "Which schools had falling enrolment last year?"}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void submit(q); } }} />
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <Button onClick={() => submit(q)} disabled={!db || busy || !q.trim() || liveBlocked}>
+          <Button onClick={() => submit(q)} disabled={!activeDb || busy || !q.trim() || liveBlocked}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />} {busy ? "Checking…" : "Ask & verify"}
           </Button>
-          {!db && <span className="text-xs text-muted-foreground">Waiting for database…</span>}
+          {!activeDb && <span className="text-xs text-muted-foreground">Waiting for database…</span>}
           {liveBlocked && <span className="text-xs text-destructive">Live mode selected but the model endpoint is not connected. Switch to scripted mode in Settings.</span>}
         </div>
         <div className="mt-3">
           <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Demo questions{mode === "scripted" ? " (scripted mode supports only these and the evaluation questions)" : ""}</p>
           <div className="flex flex-wrap gap-1.5">
-            {DEMO_QUESTIONS.map((d) => (
-              <button key={d} onClick={() => submit(d)} disabled={!db || busy || liveBlocked}
-                className="rounded border border-border bg-background px-2 py-1 text-left text-xs hover:border-primary hover:text-primary disabled:opacity-50">{d}</button>
+            {questions.map((d) => (
+              <Button variant="outline" key={d} onClick={() => submit(d)} disabled={!activeDb || busy || liveBlocked}
+                className="h-auto whitespace-normal px-2 py-1 text-left text-xs">{d}</Button>
             ))}
           </div>
         </div>
       </div>
-      <ReadinessList compact />
+      {dataset === "school" && <ReadinessList compact />}
       {run ? <Outcome run={run} onAsk={submit} /> : (
         <div className="rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">
           ProofSQL profiles the data first, then decides whether a question can be answered. Results appear here with SQL, warnings and a Proof Card.
@@ -92,13 +98,13 @@ function AskPage() {
     <>
       <h1 className="sr-only">Ask & Verify</h1>
       <div className="hidden gap-4 lg:grid lg:grid-cols-[240px_minmax(0,1fr)_380px]">
-        <aside aria-label="Schema" className="max-h-[calc(100vh-7rem)] overflow-auto"><SchemaPanel /></aside>
+        <aside aria-label="Schema" className="max-h-[calc(100vh-7rem)] overflow-auto">{schema}</aside>
         <section aria-label="Question and answer">{center}</section>
         <aside ref={proofPane} aria-label="Proof Card" className="max-h-[calc(100vh-7rem)] overflow-auto rounded-lg border border-border bg-card p-4">{proof}</aside>
       </div>
       <Tabs defaultValue="ask" className="lg:hidden">
         <TabsList className="w-full"><TabsTrigger value="schema">Schema</TabsTrigger><TabsTrigger value="ask">Ask</TabsTrigger><TabsTrigger value="proof">Proof Card</TabsTrigger></TabsList>
-        <TabsContent value="schema"><SchemaPanel /></TabsContent>
+        <TabsContent value="schema">{schema}</TabsContent>
         <TabsContent value="ask">{center}</TabsContent>
         <TabsContent value="proof"><div className="rounded-lg border border-border bg-card p-4">{proof}</div></TabsContent>
       </Tabs>

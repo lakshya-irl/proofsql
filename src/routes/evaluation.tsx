@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Loader2, Play, RotateCcw } from "lucide-react";
 import { useApp } from "@/components/proofsql/AppProvider";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,8 @@ import { DEFAULT_CONTRACT, current } from "@/lib/proofsql/contract";
 import { FIXTURE_VERSION } from "@/lib/proofsql/schema";
 import { SqlBlock } from "@/components/proofsql/ProofCard";
 import { runModeOf } from "@/lib/proofsql/readiness";
+import { COVID_CASES, runCovidEvaluation } from "@/lib/proofsql/covidEvaluation";
+import { analyzeCovidQuestion } from "@/lib/model.functions";
 
 export const Route = createFileRoute("/evaluation")({
   head: () => ({
@@ -25,19 +27,24 @@ export const Route = createFileRoute("/evaluation")({
 const flag = (v: boolean | null) => (v === null ? <span className="text-muted-foreground">n/a</span> : <CheckBadge state={v ? "PASS" : "FAIL"} />);
 
 function EvalPage() {
-  const { db, contract, mode, planner, modelStatusLabel, livePlanner, prepareDemo, preparing } = useApp();
+  const { db, contract, mode, planner, modelStatusLabel, livePlanner, prepareDemo, preparing, dataset, covidDb, countries } = useApp();
   const [res, setRes] = useState<EvalOutcome[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [ranAt, setRanAt] = useState<string | null>(null);
   const [ranWith, setRanWith] = useState<{ mode: string; label: string } | null>(null);
-  const drafts = (["enrolment", "payment_total", "academic_year"] as const).filter((k) => current(contract, k).status !== "APPROVED");
+  const cases = dataset === "covid" ? COVID_CASES : EVAL_CASES;
+  const activeDb = dataset === "covid" ? covidDb : db;
+  useEffect(() => { setRes(null); setRanAt(null); setRanWith(null); }, [dataset, mode]);
+  const drafts = dataset === "covid" ? [] : (["enrolment", "payment_total", "academic_year"] as const).filter((k) => current(contract, k).status !== "APPROVED");
   const liveBlocked = mode === "live" && !livePlanner;
 
   const run = async (useBaseline = false) => {
-    if (!db) return;
+    if (!activeDb) return;
     setBusy(true);
     try {
-      setRes(await runEvaluation({ db, contract: useBaseline ? DEFAULT_CONTRACT() : contract, mode, modelName: planner.model ?? "Qwen/Qwen2.5-Coder-7B-Instruct", modelStatus: modelStatusLabel, livePlanner }));
+      setRes(dataset === "covid"
+        ? await runCovidEvaluation({ db: activeDb, countries, mode, modelStatus: modelStatusLabel, livePlanner: mode === "live" && planner.eligibleForLive ? (question) => analyzeCovidQuestion({ data: { question } }) : undefined })
+        : await runEvaluation({ db: activeDb, contract: useBaseline ? DEFAULT_CONTRACT() : contract, mode, modelName: planner.model ?? "unknown", modelStatus: modelStatusLabel, livePlanner }));
       setRanAt(new Date().toISOString());
       setRanWith({ mode, label: modelStatusLabel });
     } finally { setBusy(false); }
@@ -50,8 +57,8 @@ function EvalPage() {
 
   const metrics = res ? summarize(res) : [];
   const failed = res?.filter((o) => !o.passed) ?? [];
-  const targetMet = res && failed.length === 0 && res.length === EVAL_CASES.length;
-  const LIVE_IDS = ["A1", "A2", "A3", "J1", "J2"];
+  const targetMet = res && failed.length === 0 && res.length === cases.length;
+  const LIVE_IDS = dataset === "covid" ? ["CV1", "CV2", "CV3", "CV4", "CV5"] : ["A1", "A2", "A3", "J1", "J2"];
   const liveUsed = res?.filter((o) => o.run.liveInference).map((o) => o.c.id) ?? [];
   // "Live" headline only when every model-dependent case really used live inference.
   const fullyLive = Boolean(res) && LIVE_IDS.every((id) => liveUsed.includes(id));
@@ -62,11 +69,11 @@ function EvalPage() {
       <div className="flex flex-wrap items-start gap-3">
         <div>
           <h1 className="text-xl font-semibold">Evaluation Lab</h1>
-          <p className="text-sm text-muted-foreground">{EVAL_CASES.length} cases run through the full pipeline. Current status <span className="font-medium">{modelStatusLabel}</span> · fixture <span className="font-mono">{FIXTURE_VERSION}</span>. A small local fixture does not prove generalization.</p>
+          <p className="text-sm text-muted-foreground">{cases.length} cases · {dataset === "covid" ? "Real COVID-19 country totals" : `School fixture ${FIXTURE_VERSION}`} · <span className="font-medium">{modelStatusLabel}</span></p>
         </div>
         <div className="ml-auto flex flex-wrap gap-2">
-          <Button variant="outline" onClick={resetAndRun} disabled={busy || preparing || liveBlocked}>{preparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />} Reset and prepare evaluation</Button>
-          <Button onClick={() => run()} disabled={!db || busy || liveBlocked}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} Run evaluation</Button>
+          {dataset === "school" && <Button variant="outline" onClick={resetAndRun} disabled={busy || preparing || liveBlocked}>{preparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />} Reset and prepare evaluation</Button>}
+          <Button onClick={() => run()} disabled={!activeDb || busy || liveBlocked}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} Run evaluation</Button>
         </div>
       </div>
       {!planner.eligibleForLive && mode === "live" && <p className="rounded border border-warning bg-warning-soft p-2 text-xs text-warning-foreground">Live planner not verified{planner.errorCode ? ` (${planner.errorCode})` : ""}. Live runs are disabled; switch to scripted in Settings.</p>}
@@ -78,7 +85,7 @@ function EvalPage() {
         <>
           <div className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">{runKind}</span> · Live inference used in {liveUsed.length}/{res.length} cases{liveUsed.length ? ` (${liveUsed.join(", ")})` : ""} · Status at run: {ranWith?.label} · Model: <span className="font-mono">{fullyLive || liveUsed.length ? res.find((o) => o.run.liveInference)?.run.modelName : "none (scripted)"}</span> · Run at {ranAt && new Date(ranAt).toLocaleString()} · Average latency {Math.round(res.reduce((a, o) => a + o.ms, 0) / res.length)} ms</div>
           {targetMet
-            ? <p className="rounded border border-success bg-success-soft p-2 text-xs text-success">{runKind}: all {res.length} cases passed: 3/3 answerable, 4/4 clarification (incl. value grounding), 3/3 abstention, 2/2 join-risk detected, 1/1 security block, 0 unsupported answers.</p>
+            ? <p className="rounded border border-success bg-success-soft p-2 text-xs text-success">{runKind}: all {res.length} cases passed. Summary counts below are derived from these measured rows.</p>
             : <p className="rounded border border-destructive bg-destructive-soft p-2 text-xs text-destructive">{failed.length} case(s) failed: {failed.map((o) => o.c.id).join(", ")}. See highlighted rows below.</p>}
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {metrics.map((m) => {
@@ -98,7 +105,7 @@ function EvalPage() {
       <div className="overflow-auto rounded-lg border border-border bg-card">
         <table className="w-full text-xs">
           <thead className="bg-muted"><tr>{["ID", "Category", "Question", "Expected", "Actual", "Decision", "Semantic answer", "Warnings", "Join radar", "Join status", "Security", "Inference used", "Mode", "Provider", "Model", "Error code", "Overall", "ms"].map((h) => <th key={h} className="px-2 py-1.5 text-left font-medium">{h}</th>)}</tr></thead>
-          <tbody>{EVAL_CASES.map((c) => {
+          <tbody>{cases.map((c) => {
             const o = res?.find((x) => x.c.id === c.id);
             return (
               <Fragment key={c.id}>
