@@ -181,3 +181,6 @@ _Last updated: 2026-10-24_
 - Fact: `.gitignore` already excludes `.env` and `.env.*`. `.env` holds only public browser keys (project ID, URL, publishable key), no private keys.
 - Fact: MODEL_API_KEY and other private keys are stored as backend secrets, not in files; README only shows a placeholder.
 - Fact: `src/pages/Index.tsx` does not exist; diagnostic not reproducible. No code changed.
+
+## 2026-10-24 — Contributors request
+- Fact: GitHub contributors come from commit authors (Lovable / gpt-engineer-app bot commits). Removing them requires rewriting git history outside Lovable; no code changed. src/App.tsx absent, diagnostic not reproducible.
