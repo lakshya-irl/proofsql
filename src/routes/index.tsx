@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Ban, CircleHelp, Loader2, ShieldAlert } from "lucide-react";
 import { useApp } from "@/components/proofsql/AppProvider";
 import { SchemaPanel } from "@/components/proofsql/SchemaPanel";
@@ -33,6 +33,9 @@ function AskPage() {
   const [run, setRun] = useState<RunResult | null>(null);
   const [busy, setBusy] = useState(false);
   const liveBlocked = mode === "live" && !livePlanner;
+  const proofPane = useRef<HTMLElement>(null);
+  // A new result always opens at its summary header, never mid-way through the previous card.
+  useEffect(() => { proofPane.current?.scrollTo({ top: 0 }); }, [run?.id]);
 
   const submit = async (question: string) => {
     if (!question.trim() || busy) return;
@@ -58,7 +61,7 @@ function AskPage() {
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void submit(q); } }} />
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <Button onClick={() => submit(q)} disabled={!db || busy || !q.trim() || liveBlocked}>
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />} Ask & verify
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />} {busy ? "Checking…" : "Ask & verify"}
           </Button>
           {!db && <span className="text-xs text-muted-foreground">Waiting for database…</span>}
           {liveBlocked && <span className="text-xs text-destructive">Live mode selected but the model endpoint is not connected. Switch to scripted mode in Settings.</span>}
@@ -82,7 +85,8 @@ function AskPage() {
     </div>
   );
 
-  const proof = run ? <ProofCard run={run} /> : <p className="text-sm text-muted-foreground">The Proof Card for the latest run appears here.</p>;
+  const proof = busy ? <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Checking “{q}”…</p>
+    : run ? <ProofCard key={run.id} run={run} /> : <p className="text-sm text-muted-foreground">The Proof Card for the latest run appears here.</p>;
 
   return (
     <>
@@ -90,7 +94,7 @@ function AskPage() {
       <div className="hidden gap-4 lg:grid lg:grid-cols-[240px_minmax(0,1fr)_380px]">
         <aside aria-label="Schema" className="max-h-[calc(100vh-7rem)] overflow-auto"><SchemaPanel /></aside>
         <section aria-label="Question and answer">{center}</section>
-        <aside aria-label="Proof Card" className="max-h-[calc(100vh-7rem)] overflow-auto rounded-lg border border-border bg-card p-4">{proof}</aside>
+        <aside ref={proofPane} aria-label="Proof Card" className="max-h-[calc(100vh-7rem)] overflow-auto rounded-lg border border-border bg-card p-4">{proof}</aside>
       </div>
       <Tabs defaultValue="ask" className="lg:hidden">
         <TabsList className="w-full"><TabsTrigger value="schema">Schema</TabsTrigger><TabsTrigger value="ask">Ask</TabsTrigger><TabsTrigger value="proof">Proof Card</TabsTrigger></TabsList>
