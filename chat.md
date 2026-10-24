@@ -125,3 +125,6 @@ _Last updated: 2026-10-24_
 - Added /datasets: public online uploads (CSV/SQLite/SQL, 20 MB), no sign-in; real measured profile (rows, NULLs, placeholders, duplicates).
 - UDISE+ real data NOT loaded: data.gov.in / UDISE+ download not reachable from the sandbox; user must upload the CSV. Ask & Verify on uploaded data NOT SUPPORTED yet.
 - Security: uploads are visible to everyone (no sign-in by owner decision).
+
+## 2026-10-24 — COVID-19 dataset
+- Added real COVID-19 data (JHU CSSE via github.com/datasets/covid-19), monthly per country, new COVID-19 data page; school demo kept.

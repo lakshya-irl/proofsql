@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { Activity, BookCheck, Database, FlaskConical, History, SearchCheck, Settings } from "lucide-react";
+import { Activity, Globe, BookCheck, Database, FlaskConical, History, SearchCheck, Settings } from "lucide-react";
 import { useApp } from "./AppProvider";
 import { ModeBadge } from "./badges";
 import { DATASET_LABEL } from "@/lib/proofsql/schema";
@@ -13,6 +13,7 @@ const NAV = [
   { to: "/history", label: "Run History", icon: History },
   { to: "/evaluation", label: "Evaluation Lab", icon: FlaskConical },
   { to: "/datasets", label: "Datasets", icon: Database },
+  { to: "/covid", label: "COVID-19 data", icon: Globe },
   { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
