@@ -21,9 +21,21 @@ _Last updated: 2026-10-24_
 - Join Safety Radar, with an aggregate-before-join repair and a comparison of risky vs repaired totals.
 - Versioned definitions (Enrolment, Payment total, Academic year). They start as DRAFT and must be approved before use.
 - Proof Card with JSON / Markdown / CSV / SQL export.
-- 12-case Evaluation Lab with measured results. Latest scripted run: all cases matched.
+- 13-case Evaluation Lab (see 2026-10-24 update).
 - Scripted mode is clearly labelled. Live mode uses MODEL_BASE_URL / MODEL_API_KEY / MODEL_NAME / MODEL_MAX_PARAMETERS on the server (default Qwen/Qwen2.5-Coder-7B-Instruct, max 8B).
-- Automated tests for the acceptance rules (11 passing).
+- Automated tests: 17 passing.
+
+## Update 2026-10-24 (input7855.txt — competition-readiness plan, "do the whole plan")
+- Semantic contract now starts APPROVED v1 (demo-ready); "Reset to demo-ready contract" added. Edits still create new DRAFT versions.
+- Prepare Demo (Ask & Verify, Settings): resets data + contract, optional history clear, runs real checks, shows readiness list.
+- Join statuses: SAFE / RISK_DETECTED / REPAIR_AVAILABLE / REPAIR_APPLIED / NOT_CHECKED / VALIDATION_ERROR. J1/J2 return ANSWER_WITH_WARNING.
+- Evaluation: 13 cases (added C4 Jaipur), semantic result comparison, summary computed from rows. Latest scripted run: 13/13 pass.
+- Jaipur grounding offers JPD, JPR, JPU or all three.
+- Scripted mode refuses unlisted questions with the required message.
+- Live mode: server function analyzeQuestion (structured request, timeout); health check with timeout, last success/failure times.
+- Run History filters + run ID, SQL, mode/model, latency. Proof Card: join/SQL safety, joins, model mode, Copy SQL.
+- Settings: setup instructions + copy button. "Edit with Lovable" badge hidden on the published site.
+- Old saved runs/contract from the previous version are not carried over (storage format changed).
 
 ## Requested changes
 - None pending.
