@@ -5,6 +5,7 @@ import { checkSql, type AllowedSchema, type Check } from "./firewall";
 import { COVID_SOURCE, interpretModelOutput, planCovid, type CovidPlan, type CovidQuestion } from "./covid";
 import { ROW_LIMIT, type Evidence, type LiveResponse, type Mode, type RunResult } from "./pipeline";
 import type { QueryExecutor } from "./queryExecution";
+import { findLeaks, gateQuestion, injectionPrecheck, resolveFollowUp, ROLE_POLICIES, type AccessRole } from "./access";
 
 export const COVID_DATASET_NAME = "COVID-19 country totals (JHU CSSE, monthly)";
 export const COVID_SNAPSHOT_ID = "covid-monthly-2022-04-16";
@@ -31,6 +32,8 @@ export type CovidInput = {
   question: string; db: Database; countries: string[]; mode: Mode; modelStatus: string;
   menu?: CovidQuestion | undefined; livePlanner?: ((q: string) => Promise<LiveResponse>) | undefined;
   execute?: QueryExecutor; signal?: AbortSignal | undefined;
+  /** Access role (no sign-in); defaults to admin. */ role?: AccessRole | undefined;
+  /** Previous resolved question when this is a follow-up turn. */ previous?: CovidQuestion | undefined;
 };
 
 const uid = () => `run_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
@@ -53,6 +56,17 @@ const describe = (q: CovidQuestion) => q.kind === "top" ? `Top ${q.n} countries 
 
 async function applyPlan(r: RunResult, plan: CovidPlan, q: CovidQuestion | null, i: CovidInput): Promise<RunResult> {
   const db = i.db;
+  const role = i.role ?? "admin";
+  if (q) {
+    const gate = gateQuestion(role, q);
+    if (!gate.allowed) {
+      r.resolvedQuestion = describe(q); r.metric = q.metric;
+      r.decision = "BLOCKED"; r.reason = gate.reason; r.summary = gate.reason; r.blockedReasons = [gate.reason];
+      r.checks = [{ name: "Role limits", state: "FAIL", detail: `${ROLE_POLICIES[role].label}: ${ROLE_POLICIES[role].summary}. Nothing was executed.` }];
+      return r;
+    }
+    if (plan.decision === "ANSWER") plan = planCovid(q, gate.scope);
+  }
   if (q) { r.resolvedQuestion = describe(q); r.metric = q.metric; r.timeInterpretation = q.kind === "change" ? `${q.from} → ${q.to}` : q.month; }
   if (plan.decision !== "ANSWER") {
     r.decision = plan.decision === "ERROR" ? "ERROR" : plan.decision;
@@ -75,6 +89,9 @@ async function applyPlan(r: RunResult, plan: CovidPlan, q: CovidQuestion | null,
   r.executionMs = Math.round((performance.now() - t) * 10) / 10;
   const columns = out?.columns ?? [];
   const all = (out?.values ?? []).map((v) => Object.fromEntries(columns.map((c, k) => [c, v[k] as SqlValue])));
+  const leaks = findLeaks(role, all);
+  if (leaks.length) { r.decision = "BLOCKED"; r.result = null; r.reason = `Result withheld: it contained data outside your role (${leaks.join(", ")}).`; r.summary = r.reason; r.checks.push({ name: "Role limits", state: "FAIL", detail: r.reason }); return r; }
+  r.checks.push({ name: "Role limits", state: "PASS", detail: `${ROLE_POLICIES[role].label}: every returned row and column is within ${ROLE_POLICIES[role].summary}.` });
   r.result = { columns, rows: all.slice(0, ROW_LIMIT), truncated: all.length > ROW_LIMIT };
   const checks: Check[] = [{ name: "Row limit", state: "PASS", detail: `≤ ${ROW_LIMIT} rows returned.` },
     { name: "Join safety", state: duplicates ? "FAIL" : "PASS", detail: duplicates ? `${duplicates} duplicate keys; result withheld.` : q?.kind === "change" ? "Measured country-month uniqueness; 1:1 self-join." : "No joins; country-month key measured unique." },
@@ -103,14 +120,23 @@ async function applyPlan(r: RunResult, plan: CovidPlan, q: CovidQuestion | null,
 export async function runCovidPipeline(i: CovidInput): Promise<RunResult> {
   const t0 = performance.now();
   const r = base(i);
-  const guard = i.menu ? null : covidPrecheck(i.question);
+  const injected = i.menu ? null : injectionPrecheck(i.question);
+  const guard = injected ? { decision: "BLOCKED" as const, reason: injected } : i.menu ? null : covidPrecheck(i.question);
+  const follow = !guard && !i.menu && i.previous ? resolveFollowUp(i.previous, i.question, i.countries) : null;
   if (guard) {
     r.plannerLabel = "No live model inference — deterministic safety/answerability guard";
     r.decision = guard.decision; r.reason = guard.reason; r.summary = guard.reason;
     if (guard.decision === "BLOCKED") { r.blockedReasons = [guard.reason]; r.checks = [{ name: "Read-only policy", state: "FAIL", detail: "Destructive request; SQL withheld." }]; }
+  } else if (follow) {
+    r.plannerLabel = "Follow-up applied to the previous question — no AI used";
+    if ("clarify" in follow) { r.decision = "CLARIFY"; r.reason = follow.clarify; r.summary = follow.clarify; r.clarifications = [follow.clarify]; }
+    else {
+      try { await applyPlan(r, planCovid(follow.question), follow.question, i); r.followUpQuestion = follow.question; }
+      catch (e) { r.decision = "ERROR"; r.result = null; r.errorCode = e instanceof Error && e.message === "QUERY_CANCELLED" ? "QUERY_CANCELLED" : "QUERY_TIMEOUT"; r.error = "Execution stopped or failed; no result retained."; r.summary = r.error; }
+    }
   } else if (i.menu) {
     r.plannerLabel = "Menu question — no AI used";
-    try { await applyPlan(r, planCovid(i.menu), i.menu, i); }
+    try { await applyPlan(r, planCovid(i.menu), i.menu, i); r.followUpQuestion = i.menu; }
     catch (e) { r.decision = "ERROR"; r.result = null; r.errorCode = e instanceof Error && e.message === "QUERY_CANCELLED" ? "QUERY_CANCELLED" : "QUERY_TIMEOUT"; r.error = "Execution stopped or failed; no result retained."; r.summary = r.error; }
   } else if (!i.livePlanner) {
     r.plannerLabel = "Scripted · no live model inference";
@@ -123,6 +149,7 @@ export async function runCovidPipeline(i: CovidInput): Promise<RunResult> {
       r.plannerLabel = `Live · ${res.modelName}`;
       const { question, plan } = interpretModelOutput(res.content, i.countries);
       await applyPlan(r, plan, question, i);
+      if (question) r.followUpQuestion = question;
     } catch (e) {
       r.decision = "ERROR"; r.result = null; r.errorCode = e instanceof Error && e.message === "QUERY_CANCELLED" ? "QUERY_CANCELLED" : e instanceof Error && e.message === "QUERY_TIMEOUT" ? "QUERY_TIMEOUT" : "PROVIDER_HTTP_ERROR"; r.plannerLabel = "Live run failed";
       r.error = "The model call failed. Nothing was executed; you can retry."; r.summary = r.error;

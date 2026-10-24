@@ -15,6 +15,7 @@ import { analyzeCovidQuestion } from "@/lib/model.functions";
 import { LEGACY_RUN_KEYS, mergeRuns, parseRuns, type Skipped } from "@/lib/proofsql/runHistory";
 import { workerExecutor } from "@/lib/proofsql/queryExecution";
 import { COVID_SCHEMA } from "@/lib/proofsql/covidPipeline";
+import { ACCESS_ROLES, type AccessRole } from "@/lib/proofsql/access";
 
 export type ReadinessItem = { label: string; state: "ok" | "warn" | "fail" | "not-run"; detail: string };
 export type Readiness = { at: string; items: ReadinessItem[] };
@@ -35,7 +36,8 @@ type Ctx = {
   /** Active dataset for Ask & Verify, Health and Contract. COVID-19 is the main line. */
   dataset: Dataset; setDataset: (d: Dataset) => void;
   covidDb: Database | null; covidHealth: CovidHealth | null; countries: string[]; months: string[];
-  askCovid: (q: string, menu?: CovidQuestion, signal?: AbortSignal) => Promise<RunResult>;
+  askCovid: (q: string, menu?: CovidQuestion, signal?: AbortSignal, previous?: CovidQuestion) => Promise<RunResult>;
+  /** Access role for COVID questions (no sign-in). */ role: AccessRole; setRole: (r: AccessRole) => void;
 };
 export type Dataset = "covid" | "school";
 
@@ -43,7 +45,7 @@ export type Dataset = "covid" | "school";
 const g = globalThis as unknown as { __proofsqlCtx?: React.Context<Ctx | null> };
 const AppCtx = (g.__proofsqlCtx ??= createContext<Ctx | null>(null));
 // contract key v2: the demo-ready baseline (APPROVED v1) replaces older draft-only state.
-const LS = { contract: "proofsql.contract.v2", runs: "proofsql.runs.v2", mode: "proofsql.mode.v1", ok: "proofsql.lastok.v1", fail: "proofsql.lastfail.v1", planner: "proofsql.planner.v1", dataset: "proofsql.dataset.v1" };
+const LS = { contract: "proofsql.contract.v2", runs: "proofsql.runs.v2", mode: "proofsql.mode.v1", ok: "proofsql.lastok.v1", fail: "proofsql.lastfail.v1", planner: "proofsql.planner.v1", dataset: "proofsql.dataset.v1", role: "proofsql.role.v1" };
 
 async function createDb(): Promise<Database> {
   const initSqlJs = (await import("sql.js")).default;
@@ -74,6 +76,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [covidHealth, setCovidHealth] = useState<CovidHealth | null>(null);
   const [countries, setCountries] = useState<string[]>([]);
   const [months, setMonths] = useState<string[]>([]);
+  const [role, setRoleState] = useState<AccessRole>("admin");
+  useEffect(() => { const v = localStorage.getItem(LS.role); if (v && (ACCESS_ROLES as string[]).includes(v)) setRoleState(v as AccessRole); }, []);
+  const setRole = (r: AccessRole) => { setRoleState(r); localStorage.setItem(LS.role, r); };
 
   useEffect(() => {
     let d: Database | null = null;
@@ -177,10 +182,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return r;
   };
 
-  const askCovid = async (q: string, menu?: CovidQuestion, signal?: AbortSignal) => {
+  const askCovid = async (q: string, menu?: CovidQuestion, signal?: AbortSignal, previous?: CovidQuestion) => {
     if (!covidDb) throw new Error("COVID database not loaded");
     const live = mode === "live" && liveReady ? async (question: string) => analyzeCovidQuestion({ data: { question } }) : undefined;
-    const r = await runCovidPipeline({ question: q, db: covidDb, countries, mode, modelStatus: modelStatusLabel, menu, livePlanner: live, execute: workerExecutor(covidDb, signal, COVID_SCHEMA), signal });
+    const r = await runCovidPipeline({ question: q, db: covidDb, countries, mode, modelStatus: modelStatusLabel, menu, livePlanner: live, execute: workerExecutor(covidDb, signal, COVID_SCHEMA), signal, role, previous });
     setRuns((rs) => [r, ...rs]);
     return r;
   };
@@ -233,9 +238,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     db, dbError, health, loadedAt, contract, runs, mode, model, lastOkCheck, checking,
     setMode, resetDataset, refreshModel, approve, editDefinition, ask, livePlanner, modelStatusLabel,
     lastFailCheck, resetContract, prepareDemo, readiness, preparing, planner, importRuns, clearRuns, legacyReport,
-    dataset, setDataset, covidDb, covidHealth, countries, months, askCovid,
+    dataset, setDataset, covidDb, covidHealth, countries, months, askCovid, role, setRole,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [db, dbError, health, loadedAt, contract, runs, mode, model, lastOkCheck, checking, modelStatusLabel, lastFailCheck, readiness, preparing, planner, legacyReport, dataset, covidDb, covidHealth, countries, months]);
+  }), [db, dbError, health, loadedAt, contract, runs, mode, model, lastOkCheck, checking, modelStatusLabel, lastFailCheck, readiness, preparing, planner, legacyReport, dataset, covidDb, covidHealth, countries, months, role]);
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }

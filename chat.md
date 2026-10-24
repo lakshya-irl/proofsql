@@ -171,3 +171,8 @@ _Last updated: 2026-10-24_
 ## 2026-10-24
 - Removed sign-in from the site per Lakshya: Settings account panel and "Approve shared definition" buttons removed; local approvals on Contract remain open to everyone. Server role functions kept unused. src/pages/Index.tsx does not exist (error not reproducible).
 - Restored emptied vite.config.ts and vitest.config.ts (preview had stopped starting).
+
+## 2026-10-24 (Lakshya)
+- Added three no-login roles for COVID (Admin: all; Analyst: no recoveries; Regional viewer: South Asia, confirmed only), enforced before running and re-checked on returned rows; role-change/injection questions are refused.
+- Added follow-ups ("now only for 2020", "deaths instead", "what about Brazil") and a 50-conversation test set plus 33 attack questions on Accuracy checks. Measured in browser: 33/33 attacks, 0 leaks, 50/50 conversations (100/100 turns). Scripted/deterministic follow-ups only; live free-text follow-ups not evaluated.
+- Restored emptied tsconfig.json, components.json, eslint/prettier/bunfig files. src/lib/utils.ts has no currentUser reference (error not reproducible).

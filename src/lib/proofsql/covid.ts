@@ -21,7 +21,7 @@ export type CovidPlan =
 
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 
-export function planCovid(q: CovidQuestion): CovidPlan {
+export function planCovid(q: CovidQuestion, scope: string[] | null = null): CovidPlan {
   if (!METRICS.includes(q.metric)) return { decision: "ABSTAIN", reason: "Unsupported metric." };
   const months = q.kind === "change" ? [q.from, q.to] : [q.month];
   if (months.some((m) => !MONTH.test(m))) return { decision: "CLARIFY", reason: "Pick a month as YYYY-MM." };
@@ -37,8 +37,9 @@ export function planCovid(q: CovidQuestion): CovidPlan {
       sql: `SELECT country, month, as_of_date, ${m} FROM covid_monthly WHERE country = ? AND month = ? LIMIT 1` };
   if (q.kind === "top") {
     const n = Math.max(1, Math.min(50, Math.floor(q.n) || 10));
-    return { decision: "ANSWER", warnings, params: [q.month],
-      sql: `SELECT country, as_of_date, ${m} FROM covid_monthly WHERE month = ? AND ${m} IS NOT NULL ORDER BY ${m} DESC LIMIT ${n}` };
+    const inScope = scope ? ` AND country IN (${scope.map(() => "?").join(", ")})` : "";
+    return { decision: "ANSWER", warnings: scope ? [...warnings, "Limited to the countries your role can see."] : warnings, params: [q.month, ...(scope ?? [])],
+      sql: `SELECT country, as_of_date, ${m} FROM covid_monthly WHERE month = ?${inScope} AND ${m} IS NOT NULL ORDER BY ${m} DESC LIMIT ${n}` };
   }
   return { decision: "ANSWER", warnings: [...warnings, "Change = end-month total minus start-month total."], params: [q.from, q.to, q.country],
     sql: `SELECT a.country, a.${m} AS start_value, b.${m} AS end_value, b.${m} - a.${m} AS change FROM covid_monthly a JOIN covid_monthly b ON b.country = a.country WHERE a.month = ? AND b.month = ? AND a.country = ? LIMIT 1` };
