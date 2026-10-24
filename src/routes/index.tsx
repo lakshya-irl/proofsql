@@ -12,6 +12,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DEMO_QUESTIONS } from "@/lib/proofsql/planner";
 import { isAnswer, type RunResult } from "@/lib/proofsql/pipeline";
+import { toast } from "sonner";
+import { safeMessage } from "@/components/proofsql/ErrorBoundary";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -33,9 +35,11 @@ function AskPage() {
   const liveBlocked = mode === "live" && !livePlanner;
 
   const submit = async (question: string) => {
-    if (!question.trim()) return;
-    setQ(question); setBusy(true);
-    try { setRun(await ask(question)); } finally { setBusy(false); }
+    if (!question.trim() || busy) return;
+    setQ(question); setBusy(true); setRun(null);
+    try { setRun(await ask(question)); }
+    catch (e) { toast.error("The question could not be checked", { description: `${safeMessage(e)} — nothing was executed. Please try again.` }); }
+    finally { setBusy(false); }
   };
 
   const center = (

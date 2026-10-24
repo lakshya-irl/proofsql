@@ -4,6 +4,7 @@ import { Activity, BookCheck, FlaskConical, History, SearchCheck, Settings } fro
 import { useApp } from "./AppProvider";
 import { ModeBadge } from "./badges";
 import { DATASET_LABEL } from "@/lib/proofsql/schema";
+import mark from "@/assets/proofsql-mark.png.asset.json";
 
 const NAV = [
   { to: "/", label: "Ask & Verify", icon: SearchCheck },
@@ -19,13 +20,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col bg-background lg:flex-row">
       <aside className="bg-sidebar text-sidebar-foreground lg:sticky lg:top-0 lg:h-screen lg:w-60 lg:shrink-0">
-        <div className="flex items-center gap-2 px-4 py-3 lg:py-5">
-          <div className="flex h-7 w-7 items-center justify-center rounded bg-sidebar-primary font-mono text-xs font-bold text-sidebar-primary-foreground">P✓</div>
+        <Link to="/" className="flex items-center gap-2.5 px-4 py-3 lg:border-b lg:border-sidebar-border lg:py-5">
+          <img src={mark.url} alt="" width={32} height={32} className="h-8 w-8 rounded-md" />
           <div>
-            <div className="text-sm font-semibold text-sidebar-accent-foreground">ProofSQL</div>
-            <div className="hidden text-[11px] lg:block">Answerability-first analyst</div>
+            <div className="text-[15px] font-semibold tracking-tight text-sidebar-accent-foreground">Proof<span className="text-sidebar-primary">SQL</span></div>
+            <div className="hidden text-[11px] lg:block">Answers you can trust</div>
           </div>
-        </div>
+        </Link>
         <nav aria-label="Main" className="flex gap-1 overflow-x-auto px-2 pb-2 lg:flex-col lg:overflow-visible">
           {NAV.map((n) => (
             <Link key={n.to} to={n.to} activeOptions={{ exact: n.to === "/" }}
