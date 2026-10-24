@@ -3,13 +3,14 @@ import { useApp } from "./AppProvider";
 import { COVID_DEFINITIONS, COVID_DATASET_NAME, COVID_SNAPSHOT_ID } from "@/lib/proofsql/covidPipeline";
 import { Button } from "@/components/ui/button";
 import { SqlBlock } from "./ProofCard";
+import { SharedApproval } from "./SharedApproval";
 
 export function CovidSchema() {
   return <section className="space-y-3 text-sm"><h2 className="font-semibold">COVID-19 schema</h2><p className="font-mono">covid_monthly</p><p>country · month · as_of_date · confirmed · deaths · recovered</p><p className="text-muted-foreground">Grain: country × month. Snapshot {COVID_SNAPSHOT_ID}.</p></section>;
 }
 
 export function CovidContract() {
-  return <div className="space-y-4"><h1 className="text-xl font-semibold">Semantic Contract · COVID-19</h1>{COVID_DEFINITIONS.map((d) => <section key={d.key} className="border-b border-border py-4"><h2 className="font-semibold">{d.title} <span className="text-xs text-muted-foreground">Fixed definition · v1</span></h2><p className="mt-2 text-sm">{d.meaning}</p><p className="mt-2 font-mono text-xs">{d.expression} · {d.grain}</p></section>)}</div>;
+  return <div className="space-y-4"><h1 className="text-xl font-semibold">Semantic Contract · COVID-19</h1>{COVID_DEFINITIONS.map((d) => <section key={d.key} className="border-b border-border py-4"><h2 className="font-semibold">{d.title} <span className="text-xs text-muted-foreground">Fixed definition · v1</span></h2><p className="mt-2 text-sm">{d.meaning}</p><p className="my-2 font-mono text-xs">{d.expression} · {d.grain}</p><SharedApproval dataset="covid" definition={d} /></section>)}</div>;
 }
 
 export function CovidHealthView() {
