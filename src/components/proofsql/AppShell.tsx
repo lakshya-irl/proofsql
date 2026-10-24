@@ -12,6 +12,7 @@ const NAV = [
   { to: "/contract", label: "Semantic Contract", icon: BookCheck },
   { to: "/history", label: "Run History", icon: History },
   { to: "/evaluation", label: "Evaluation Lab", icon: FlaskConical },
+  { to: "/datasets", label: "Datasets", icon: Database },
   { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
