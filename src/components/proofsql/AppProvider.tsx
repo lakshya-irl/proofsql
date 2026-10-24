@@ -9,6 +9,9 @@ import { analyzeQuestion, getModelStatus, type ModelStatus } from "@/lib/model.f
 import { EVAL_CASES } from "@/lib/proofsql/evaluation";
 import { scriptedPlan } from "@/lib/proofsql/planner";
 import { UNKNOWN_READINESS, readinessFromStatus, reuseCached, statusLabel, type PlannerReadiness } from "@/lib/proofsql/readiness";
+import { runCovidPipeline, scanCovidHealth, type CovidHealth } from "@/lib/proofsql/covidPipeline";
+import { COVID_FILE, type CovidQuestion } from "@/lib/proofsql/covid";
+import { analyzeCovidQuestion } from "@/lib/model.functions";
 import { LEGACY_RUN_KEYS, mergeRuns, parseRuns, type Skipped } from "@/lib/proofsql/runHistory";
 
 export type ReadinessItem = { label: string; state: "ok" | "warn" | "fail" | "not-run"; detail: string };
@@ -27,13 +30,18 @@ type Ctx = {
   importRuns: (text: string) => { added: number; duplicates: number; skipped: Skipped[] };
   clearRuns: () => void;
   legacyReport: { migrated: number; skipped: Skipped[] } | null;
+  /** Active dataset for Ask & Verify, Health and Contract. COVID-19 is the main line. */
+  dataset: Dataset; setDataset: (d: Dataset) => void;
+  covidDb: Database | null; covidHealth: CovidHealth | null; countries: string[]; months: string[];
+  askCovid: (q: string, menu?: CovidQuestion) => Promise<RunResult>;
 };
+export type Dataset = "covid" | "school";
 
 // Kept on globalThis so a hot reload of this file reuses the same context instead of orphaning consumers.
 const g = globalThis as unknown as { __proofsqlCtx?: React.Context<Ctx | null> };
 const AppCtx = (g.__proofsqlCtx ??= createContext<Ctx | null>(null));
 // contract key v2: the demo-ready baseline (APPROVED v1) replaces older draft-only state.
-const LS = { contract: "proofsql.contract.v2", runs: "proofsql.runs.v2", mode: "proofsql.mode.v1", ok: "proofsql.lastok.v1", fail: "proofsql.lastfail.v1", planner: "proofsql.planner.v1" };
+const LS = { contract: "proofsql.contract.v2", runs: "proofsql.runs.v2", mode: "proofsql.mode.v1", ok: "proofsql.lastok.v1", fail: "proofsql.lastfail.v1", planner: "proofsql.planner.v1", dataset: "proofsql.dataset.v1" };
 
 async function createDb(): Promise<Database> {
   const initSqlJs = (await import("sql.js")).default;
@@ -59,6 +67,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const [preparing, setPreparing] = useState(false);
   const [legacyReport, setLegacyReport] = useState<{ migrated: number; skipped: Skipped[] } | null>(null);
+  const [dataset, setDatasetState] = useState<Dataset>("covid");
+  const [covidDb, setCovidDb] = useState<Database | null>(null);
+  const [covidHealth, setCovidHealth] = useState<CovidHealth | null>(null);
+  const [countries, setCountries] = useState<string[]>([]);
+  const [months, setMonths] = useState<string[]>([]);
+
+  useEffect(() => {
+    let d: Database | null = null;
+    (async () => {
+      try {
+        const SQL = await (await import("sql.js")).default({ locateFile: (f: string) => `/wasm/${f}` });
+        d = new SQL.Database(new Uint8Array(await (await fetch(COVID_FILE)).arrayBuffer()));
+        setCountries(d.exec("SELECT DISTINCT country FROM covid_monthly ORDER BY country")[0]!.values.map((v) => String(v[0])));
+        setMonths(d.exec("SELECT DISTINCT month FROM covid_monthly ORDER BY month")[0]!.values.map((v) => String(v[0])));
+        setCovidHealth(scanCovidHealth(d));
+        setCovidDb(d);
+      } catch (e) { setDbError(`COVID data: ${e instanceof Error ? e.message : String(e)}`); }
+    })();
+    return () => d?.close();
+  }, []);
+  const setDataset = (d: Dataset) => { setDatasetState(d); localStorage.setItem(LS.dataset, d); };
 
   const load = useCallback(async (): Promise<{ d: Database; h: Health } | null> => {
     try {
@@ -112,6 +141,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       savedMode = localStorage.getItem(LS.mode); if (savedMode === "live" || savedMode === "scripted") setModeState(savedMode);
       setLastOk(localStorage.getItem(LS.ok));
       setLastFail(localStorage.getItem(LS.fail));
+      const ds = localStorage.getItem(LS.dataset); if (ds === "covid" || ds === "school") setDatasetState(ds);
     } catch { /* corrupted local state is ignored */ }
     setHydrated(true);
     void load();
@@ -141,6 +171,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const ask = async (q: string) => {
     if (!db) throw new Error("Database not loaded");
     const r = await runPipeline({ question: q, mode, contract, db, modelName: model?.modelName ?? "Qwen/Qwen2.5-Coder-7B-Instruct", modelStatus: modelStatusLabel, livePlanner });
+    setRuns((rs) => [r, ...rs]);
+    return r;
+  };
+
+  const askCovid = async (q: string, menu?: CovidQuestion) => {
+    if (!covidDb) throw new Error("COVID database not loaded");
+    const live = mode === "live" && liveReady ? async (question: string) => analyzeCovidQuestion({ data: { question } }) : undefined;
+    const r = await runCovidPipeline({ question: q, db: covidDb, countries, mode, modelStatus: modelStatusLabel, menu, livePlanner: live });
     setRuns((rs) => [r, ...rs]);
     return r;
   };
