@@ -7,6 +7,7 @@ import { PlanSchema, SCRIPTED_UNSUPPORTED, scriptedPlan, type Plan, type Scripte
 import { LivePlanSchema, compileLivePlan, precheck, type ErrorCode } from "./livePlan";
 import { current, type Contract, type DefKey, type DefVersion } from "./contract";
 import { DATASET_NAME, SNAPSHOT_ID, YEAR_RULES, allColumns, tableNames } from "./schema";
+import type { QueryExecutor } from "./queryExecution";
 
 export type Decision = "ANSWER" | "ANSWER_WITH_WARNING" | "CLARIFY" | "ABSTAIN" | "BLOCKED" | "ERROR";
 export type Mode = "scripted" | "live";
@@ -57,6 +58,7 @@ export type PipelineInput = {
   question: string; mode: Mode; contract: Contract; db: Database;
   modelName: string; modelStatus: string;
   livePlanner?: ((req: LiveRequest) => Promise<LiveResponse>) | undefined;
+  execute?: QueryExecutor; signal?: AbortSignal;
 };
 
 const uid = () => `run_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
@@ -129,6 +131,15 @@ async function runInner(input: PipelineInput): Promise<RunResult> {
     joinStatus: null, liveInference: false, modelLatencyMs: null, latencyMs: null,
   };
   const checks = r.checks;
+  const actualTables = new Set(db.exec("SELECT name FROM sqlite_master WHERE type='table'")[0]?.values.map((v) => String(v[0])) ?? []);
+  const absent = tableNames().filter((t) => !actualTables.has(t));
+  if (absent.length) {
+    r.decision = "CLARIFY"; r.errorCode = "SCHEMA_CHANGED";
+    r.reason = `Schema changed: missing ${absent.join(", ")}. Available tables: ${[...actualTables].join(", ")}. Confirm a table mapping before querying; no automatic rename was applied.`;
+    r.clarifications = [r.reason]; r.summary = r.reason;
+    checks.push({ name: "Runtime schema matches contract", state: "FAIL", detail: r.reason });
+    return r;
+  }
 
   // 1. Plan
   let sc: ScriptedCase | null = null;
@@ -291,7 +302,9 @@ async function runInner(input: PipelineInput): Promise<RunResult> {
     const before = db.getRowsModified();
     const tx = performance.now();
     try {
-      const out = runQuery(db, `SELECT * FROM (${execSql}) LIMIT ${ROW_LIMIT + 1}`, execParams);
+      if (input.signal?.aborted) return fail(r, "QUERY_CANCELLED", "Stopped before SQL execution");
+      const workerOut = input.execute ? await input.execute(`SELECT * FROM (${execSql}) LIMIT ${ROW_LIMIT + 1}`, execParams) : null;
+      const out = workerOut ? { columns: workerOut.columns, rows: workerOut.values.map((v) => Object.fromEntries(workerOut.columns.map((c, k) => [c, v[k] ?? null]))) } : runQuery(db, `SELECT * FROM (${execSql}) LIMIT ${ROW_LIMIT + 1}`, execParams);
       r.executionMs = Math.round((performance.now() - tx) * 10) / 10;
       const truncated = out.rows.length > ROW_LIMIT;
       r.result = { columns: out.columns, rows: out.rows.slice(0, ROW_LIMIT), truncated };
@@ -300,11 +313,16 @@ async function runInner(input: PipelineInput): Promise<RunResult> {
       const modified = db.getRowsModified() - before;
       checks.push({ name: "No rows modified", state: modified === 0 ? "PASS" : "FAIL", detail: `${modified} rows modified.` });
     } catch (e) {
+      if (e instanceof Error && (e.message === "QUERY_CANCELLED" || e.message === "QUERY_TIMEOUT")) {
+        r.decision = "ERROR"; r.errorCode = e.message; r.result = null;
+        r.error = e.message === "QUERY_CANCELLED" ? "Query stopped; the isolated execution was terminated. No result was retained." : "Query exceeded the 8-second execution deadline; the isolated execution was terminated.";
+        r.summary = r.error; checks.push({ name: "Query execution", state: "FAIL", detail: r.error }); return r;
+      }
       r.decision = "ERROR"; r.error = e instanceof Error ? e.message : "Execution failed";
       checks.push({ name: "SQL executed successfully", state: "FAIL", detail: r.error }); return r;
     }
     checks.push({ name: "Bound parameters", state: "PASS", detail: execParams.length ? `${execParams.length} values bound via placeholders.` : "No user values required." });
-    checks.push({ name: "Query timeout", state: "NOT CHECKED", detail: "In-browser SQLite runs synchronously; cancellation is not available." });
+    checks.push({ name: "Query timeout", state: input.execute ? "PASS" : "NOT CHECKED", detail: input.execute ? "Final SQL completed inside the isolated worker's 8-second deadline; stopping terminates that worker." : "Synchronous execution; cancellation was not checked." });
 
     // 8. Evidence (app-authored queries)
     for (const ev of sc?.evidence ?? []) {

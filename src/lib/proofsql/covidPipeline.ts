@@ -4,6 +4,7 @@ import type { Database, SqlValue } from "sql.js";
 import { checkSql, type AllowedSchema, type Check } from "./firewall";
 import { COVID_SOURCE, interpretModelOutput, planCovid, type CovidPlan, type CovidQuestion } from "./covid";
 import { ROW_LIMIT, type Evidence, type LiveResponse, type Mode, type RunResult } from "./pipeline";
+import type { QueryExecutor } from "./queryExecution";
 
 export const COVID_DATASET_NAME = "COVID-19 country totals (JHU CSSE, monthly)";
 export const COVID_SNAPSHOT_ID = "covid-monthly-2022-04-16";
@@ -29,6 +30,7 @@ export function covidPrecheck(q: string): { decision: "BLOCKED" | "ABSTAIN"; rea
 export type CovidInput = {
   question: string; db: Database; countries: string[]; mode: Mode; modelStatus: string;
   menu?: CovidQuestion | undefined; livePlanner?: ((q: string) => Promise<LiveResponse>) | undefined;
+  execute?: QueryExecutor; signal?: AbortSignal;
 };
 
 const uid = () => `run_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
@@ -49,7 +51,8 @@ function base(i: CovidInput): RunResult {
 const describe = (q: CovidQuestion) => q.kind === "top" ? `Top ${q.n} countries by ${q.metric} in ${q.month}`
   : q.kind === "change" ? `Change in ${q.metric} for ${q.country} from ${q.from} to ${q.to}` : `${q.metric} for ${q.country} in ${q.month}`;
 
-function applyPlan(r: RunResult, plan: CovidPlan, q: CovidQuestion | null, db: Database): RunResult {
+async function applyPlan(r: RunResult, plan: CovidPlan, q: CovidQuestion | null, i: CovidInput): Promise<RunResult> {
+  const db = i.db;
   if (q) { r.resolvedQuestion = describe(q); r.metric = q.metric; r.timeInterpretation = q.kind === "change" ? `${q.from} → ${q.to}` : q.month; }
   if (plan.decision !== "ANSWER") {
     r.decision = plan.decision === "ERROR" ? "ERROR" : plan.decision;
@@ -65,14 +68,20 @@ function applyPlan(r: RunResult, plan: CovidPlan, q: CovidQuestion | null, db: D
   if (!fw.allowed) { r.decision = "ERROR"; r.errorCode = "SQL_AST_REJECTED"; r.error = `Compiled SQL was rejected: ${fw.reasons.join(" ")} Nothing was executed.`; r.summary = r.error; return r; }
   r.sql = plan.sql; r.params = plan.params;
   const t = performance.now();
-  const out = db.exec(plan.sql, plan.params)[0];
+  if (i.signal?.aborted) throw new Error("QUERY_CANCELLED");
+  const out = i.execute ? await i.execute(plan.sql, plan.params) : db.exec(plan.sql, plan.params)[0];
   r.executionMs = Math.round((performance.now() - t) * 10) / 10;
   const columns = out?.columns ?? [];
   const all = (out?.values ?? []).map((v) => Object.fromEntries(columns.map((c, k) => [c, v[k] as SqlValue])));
   r.result = { columns, rows: all.slice(0, ROW_LIMIT), truncated: all.length > ROW_LIMIT };
+  const duplicates = Number(db.exec("SELECT COUNT(*) FROM (SELECT country, month FROM covid_monthly GROUP BY country, month HAVING COUNT(*) > 1)")[0]?.values[0]?.[0] ?? 0);
   const checks: Check[] = [{ name: "Row limit", state: "PASS", detail: `≤ ${ROW_LIMIT} rows returned.` },
-    { name: "Join safety", state: "PASS", detail: q?.kind === "change" ? "Self-join on country with one row per country-month (1:1)." : "No joins." }];
+    { name: "Join safety", state: duplicates ? "FAIL" : "PASS", detail: duplicates ? `${duplicates} duplicate keys; result withheld.` : q?.kind === "change" ? "Measured country-month uniqueness; 1:1 self-join." : "No joins; country-month key measured unique." },
+    { name: "Query timeout", state: i.execute ? "PASS" : "NOT CHECKED", detail: i.execute ? "Completed within the isolated execution deadline." : "Synchronous execution; stopping not checked." }];
   r.checks.push(...checks);
+  if (duplicates) { r.decision = "ERROR"; r.errorCode = "JOIN_CHECK_FAILED"; r.result = null; r.error = "Duplicate country-month keys invalidate this query."; r.summary = r.error; return r; }
+  r.joinStatus = "SAFE";
+  r.definitions = COVID_DEFINITIONS.map((d) => ({ ...d, key: d.key === "change" ? "payment_total" : "enrolment", version: 1, status: "APPROVED", sourceColumns: ["covid_monthly.country", "covid_monthly.month", `covid_monthly.${q?.metric ?? "confirmed"}`], nullPolicy: "Missing is not zero.", duplicatePolicy: "Country-month keys must be unique.", updatedAt: "2022-04-16T00:00:00.000Z" }));
   const missing = all.some((row) => Object.values(row).some((v) => v === null));
   const ev: Evidence[] = plan.warnings.map((w) => ({ label: "Data note", state: "WARNING", detail: w }));
   if (missing) ev.push({ label: "Missing values", state: "WARNING", detail: "Some values are missing and are shown as missing, not zero." });
@@ -80,7 +89,8 @@ function applyPlan(r: RunResult, plan: CovidPlan, q: CovidQuestion | null, db: D
   r.assumptions = plan.warnings;
   r.decision = all.length === 0 ? "ABSTAIN" : ev.some((e) => e.detail.includes("partial") || e.label === "Missing values") ? "ANSWER_WITH_WARNING" : "ANSWER";
   if (all.length === 0) { r.reason = "No matching row was reported for this country and month."; r.summary = r.reason; r.sql = plan.sql; return r; }
-  const first = all[0]!;
+  const first = all[0];
+  if (!first) return r;
   const val = q?.kind === "change" ? first["change"] : q ? first[q.metric] : null;
   r.summary = q?.kind === "top" ? `${r.resolvedQuestion}: ${all.map((x) => x["country"]).slice(0, 5).join(", ")}${all.length > 5 ? "…" : ""}.`
     : `${r.resolvedQuestion}: ${val === null || val === undefined ? "missing" : Number(val).toLocaleString()}.`;
@@ -98,7 +108,8 @@ export async function runCovidPipeline(i: CovidInput): Promise<RunResult> {
     if (guard.decision === "BLOCKED") { r.blockedReasons = [guard.reason]; r.checks = [{ name: "Read-only policy", state: "FAIL", detail: "Destructive request; SQL withheld." }]; }
   } else if (i.menu) {
     r.plannerLabel = "Menu question — no AI used";
-    applyPlan(r, planCovid(i.menu), i.menu, i.db);
+    try { await applyPlan(r, planCovid(i.menu), i.menu, i); }
+    catch (e) { r.decision = "ERROR"; r.result = null; r.errorCode = e instanceof Error && e.message === "QUERY_CANCELLED" ? "QUERY_CANCELLED" : "QUERY_TIMEOUT"; r.error = "Execution stopped or failed; no result retained."; r.summary = r.error; }
   } else if (!i.livePlanner) {
     r.plannerLabel = "Scripted · no live model inference";
     r.decision = "CLARIFY"; r.reason = "Free-text COVID questions need the live model. Use the question menu, or switch to live mode in Settings.";
@@ -109,11 +120,11 @@ export async function runCovidPipeline(i: CovidInput): Promise<RunResult> {
       r.liveInference = true; r.modelName = res.modelName; r.modelLatencyMs = res.latencyMs;
       r.plannerLabel = `Live · ${res.modelName}`;
       const { question, plan } = interpretModelOutput(res.content, i.countries);
-      applyPlan(r, plan, question, i.db);
+      await applyPlan(r, plan, question, i);
     } catch (e) {
-      r.decision = "ERROR"; r.errorCode = "PROVIDER_HTTP_ERROR"; r.plannerLabel = "Live model call failed";
+      r.decision = "ERROR"; r.result = null; r.errorCode = e instanceof Error && e.message === "QUERY_CANCELLED" ? "QUERY_CANCELLED" : e instanceof Error && e.message === "QUERY_TIMEOUT" ? "QUERY_TIMEOUT" : "PROVIDER_HTTP_ERROR"; r.plannerLabel = "Live run failed";
       r.error = "The model call failed. Nothing was executed; you can retry."; r.summary = r.error;
-      r.developerTrace = String(e instanceof Error ? e.message : e).replace(/(bearer\s+)\S+/gi, "$1[redacted]").slice(0, 500);
+      r.developerTrace = null;
     }
   }
   r.latencyMs = Math.round(performance.now() - t0);
