@@ -6,7 +6,14 @@ const DEFAULT_MODEL = "Qwen/Qwen2.5-Coder-7B-Instruct";
 const HEALTH_TIMEOUT_MS = 8000;
 const PLAN_TIMEOUT_MS = 45000;
 
+// Live mode uses the built-in Lovable AI connection (owner decision: the 8B limit is dropped because no ≤8B host worked).
+// The UI always shows the real model name below; it is never relabelled.
+const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1";
+const GATEWAY_MODEL = "google/gemini-3-flash-preview";
+
 function config() {
+  const gatewayKey = process.env["LOVABLE_API_KEY"] ?? "";
+  if (gatewayKey) return { baseUrl: GATEWAY_URL, apiKey: gatewayKey, modelName: GATEWAY_MODEL, maxParams: "n/a (hosted)", withinLimit: true };
   const baseUrl = process.env["MODEL_BASE_URL"] ?? "";
   const apiKey = process.env["MODEL_API_KEY"] ?? "";
   const modelName = process.env["MODEL_NAME"] || DEFAULT_MODEL;
