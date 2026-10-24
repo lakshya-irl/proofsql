@@ -19,3 +19,4 @@
 - Live model output is a strict JSON plan (LivePlanSchema, no SQL) compiled deterministically by compileLivePlan; deterministic precheck runs before any model call. Why: the model must never author executable SQL.
 - Live/scripted status labels come only from the shared PlannerReadiness (src/lib/proofsql/readiness.ts) derived from the health check. Why: pages must never disagree about whether the planner is verified.
 - Uploaded datasets: public `datasets` table + private storage bucket with anon read/insert policies; files are validated by opening them in sql.js before upload. Why: owner wants uploads without sign-in.
+- This remix starts with an empty Drizzle migration journal; add future schema changes through the migration tool rather than restoring the source project's history, to avoid replaying copied changes against the new database.
