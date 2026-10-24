@@ -12,6 +12,7 @@ import { runModeOf } from "@/lib/proofsql/readiness";
 import { COVID_CASES, runCovidEvaluation } from "@/lib/proofsql/covidEvaluation";
 import { analyzeCovidQuestion } from "@/lib/model.functions";
 import { processingStatus } from "@/lib/proofsql/presentation";
+import { AccessSuites } from "@/components/proofsql/AccessSuites";
 
 export const Route = createFileRoute("/evaluation")({
   head: () => ({
@@ -141,6 +142,7 @@ function EvalPage() {
           })}</tbody>
         </table>
       </div></details>
+      {dataset === "covid" && <AccessSuites />}
     </div>
   );
 }
