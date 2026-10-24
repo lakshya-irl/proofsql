@@ -80,16 +80,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    let savedMode: string | null = null;
     try {
       const c = localStorage.getItem(LS.contract); if (c) setContract(JSON.parse(c));
       const r = localStorage.getItem(LS.runs); if (r) setRuns(JSON.parse(r));
-      const m = localStorage.getItem(LS.mode); if (m === "live" || m === "scripted") setModeState(m);
+      savedMode = localStorage.getItem(LS.mode); if (savedMode === "live" || savedMode === "scripted") setModeState(savedMode);
       setLastOk(localStorage.getItem(LS.ok));
       setLastFail(localStorage.getItem(LS.fail));
     } catch { /* corrupted local state is ignored */ }
     setHydrated(true);
     void load();
-    void refreshModel();
+    // Live is the primary mode: start in live when the model answered the health check and the user hasn't chosen a mode.
+    void refreshModel().then((s) => { if (!savedMode && s.reachable && s.withinLimit) setModeState("live"); });
   }, [load, refreshModel]);
 
   useEffect(() => { if (hydrated) localStorage.setItem(LS.contract, JSON.stringify(contract)); }, [contract, hydrated]);

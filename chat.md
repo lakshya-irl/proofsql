@@ -91,3 +91,4 @@ _Last updated: 2026-10-24_
 - Owner (Rishi) dropped the 8B limit: no ≤8B host worked (OpenRouter 429, HF 402, Groq allam bad JSON, Google gemma-3-4b removed).
 - Lovable Cloud enabled. Live mode now uses google/gemini-3-flash-preview via Lovable AI; tested: real question answered (5 rows, join SAFE, 1.7 s).
 - The UI shows the real model name. Declined the request to label it as Qwen (that would misstate the model).
+- 2026-10-24: Live is now the primary mode (default when the model answers and no mode was chosen); scripted is the backup. Messy demo DB shared as proofsql-messy-demo.sqlite/.sql. Uploading your own database is not supported yet.
