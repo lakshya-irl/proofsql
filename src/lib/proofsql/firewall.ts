@@ -53,7 +53,9 @@ export function parseSql(sql: string): Node {
   return parser.astify(sql, OPT);
 }
 
-export function checkSql(sql: string): FirewallResult {
+export type AllowedSchema = { tables: string[]; columns: Set<string> };
+/** `schema` defaults to the school demo; other datasets pass their own allowlist. */
+export function checkSql(sql: string, schema?: AllowedSchema): FirewallResult {
   const res: FirewallResult = {
     allowed: false, parseError: null, reasons: [], checks: [], ast: null, tables: [], columns: [], ctes: [],
   };
@@ -117,7 +119,7 @@ export function checkSql(sql: string): FirewallResult {
   } catch {
     res.reasons.push("Could not resolve table/column references.");
   }
-  const known = new Set(tableNames());
+  const known = new Set(schema ? schema.tables : tableNames());
   const badTables: string[] = [];
   const ops = new Set<string>();
   for (const t of tableList) {
@@ -136,7 +138,7 @@ export function checkSql(sql: string): FirewallResult {
   } else res.checks.push({ name: "Tables exist", state: "PASS", detail: `Uses ${res.tables.join(", ") || "no base tables"}${ctes.size ? `; CTEs: ${[...ctes].join(", ")}` : ""}.` });
 
   // Columns
-  const cols = allColumns();
+  const cols = schema ? schema.columns : allColumns();
   const badCols: string[] = [];
   for (const c of columnList) {
     const parts = c.split("::");
