@@ -21,7 +21,9 @@ type Ctx = {
   prepareDemo: (clearHistory: boolean) => Promise<Readiness>; readiness: Readiness | null; preparing: boolean;
 };
 
-const AppCtx = createContext<Ctx | null>(null);
+// Kept on globalThis so a hot reload of this file reuses the same context instead of orphaning consumers.
+const g = globalThis as unknown as { __proofsqlCtx?: React.Context<Ctx | null> };
+const AppCtx = (g.__proofsqlCtx ??= createContext<Ctx | null>(null));
 // contract key v2: the demo-ready baseline (APPROVED v1) replaces older draft-only state.
 const LS = { contract: "proofsql.contract.v2", runs: "proofsql.runs.v2", mode: "proofsql.mode.v1", ok: "proofsql.lastok.v1", fail: "proofsql.lastfail.v1" };
 
