@@ -96,7 +96,14 @@ export const analyzeQuestion = createServerFn({ method: "POST" })
     } catch {
       throw new Error(`Model endpoint did not respond within ${PLAN_TIMEOUT_MS / 1000}s or is unreachable.`);
     }
-    if (!res.ok) throw new Error(`Model endpoint error HTTP ${res.status}.`);
+    if (!res.ok) {
+      const hint = res.status === 401 ? " The API key was rejected; check MODEL_API_KEY."
+        : res.status === 402 ? " The model account has no credits left."
+        : res.status === 404 ? " The model name was not found; check MODEL_NAME."
+        : res.status === 429 ? " The model host is rate limiting requests or the account is out of credits. Try again shortly."
+        : "";
+      throw new Error(`Model endpoint error HTTP ${res.status}.${hint}`);
+    }
     const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
     const content = json.choices?.[0]?.message?.content;
     if (!content) throw new Error("Model returned no content.");
