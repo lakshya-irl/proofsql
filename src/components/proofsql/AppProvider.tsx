@@ -231,8 +231,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     db, dbError, health, loadedAt, contract, runs, mode, model, lastOkCheck, checking,
     setMode, resetDataset, refreshModel, approve, editDefinition, ask, livePlanner, modelStatusLabel,
     lastFailCheck, resetContract, prepareDemo, readiness, preparing, planner, importRuns, clearRuns, legacyReport,
+    dataset, setDataset, covidDb, covidHealth, countries, months, askCovid,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [db, dbError, health, loadedAt, contract, runs, mode, model, lastOkCheck, checking, modelStatusLabel, lastFailCheck, readiness, preparing, planner, legacyReport]);
+  }), [db, dbError, health, loadedAt, contract, runs, mode, model, lastOkCheck, checking, modelStatusLabel, lastFailCheck, readiness, preparing, planner, legacyReport, dataset, covidDb, covidHealth, countries, months]);
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }
