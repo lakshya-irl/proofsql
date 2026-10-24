@@ -148,7 +148,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       items.push(s.reachable && s.withinLimit
         ? { label: `Live model reachable — ${s.modelName}`, state: "ok", detail: `Health check answered${s.latencyMs != null ? ` in ${s.latencyMs} ms` : ""}.` }
         : { label: "Live model unavailable — scripted mode active", state: "warn", detail: s.error ?? "Endpoint not reachable." });
-      if (!(s.reachable && s.withinLimit)) setMode("scripted");
     } finally { setPreparing(false); }
     const r = { at: new Date().toISOString(), items };
     setReadiness(r);
