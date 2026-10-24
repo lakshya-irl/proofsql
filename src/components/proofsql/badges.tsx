@@ -1,9 +1,11 @@
 import { cn } from "@/lib/utils";
 import type { CheckState } from "@/lib/proofsql/firewall";
 import type { Decision } from "@/lib/proofsql/pipeline";
+import type { JoinStatus } from "@/lib/proofsql/joinRadar";
 
 const decisionStyle: Record<Decision, string> = {
   ANSWER: "bg-primary text-primary-foreground",
+  ANSWER_WITH_WARNING: "bg-primary text-primary-foreground ring-2 ring-warning",
   CLARIFY: "bg-warning text-warning-foreground",
   ABSTAIN: "bg-secondary text-secondary-foreground border border-border",
   BLOCKED: "bg-destructive text-destructive-foreground",
@@ -32,4 +34,17 @@ export function ModeBadge({ label, live }: { label: string; live: boolean }) {
       {label}
     </span>
   );
+}
+
+const joinStyle: Record<JoinStatus, string> = {
+  SAFE: "bg-success-soft text-success",
+  RISK_DETECTED: "bg-warning-soft text-warning-foreground",
+  REPAIR_AVAILABLE: "bg-warning-soft text-warning-foreground",
+  REPAIR_APPLIED: "bg-success-soft text-success",
+  NOT_CHECKED: "bg-muted text-muted-foreground",
+  VALIDATION_ERROR: "bg-destructive-soft text-destructive",
+};
+
+export function JoinBadge({ status }: { status: JoinStatus }) {
+  return <span className={cn("inline-flex shrink-0 items-center justify-center rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wide", joinStyle[status])}>{status.replace(/_/g, " ")}</span>;
 }

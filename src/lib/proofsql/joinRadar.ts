@@ -5,8 +5,13 @@ import type { CheckState } from "./firewall";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Node = any;
 
+/** Join status vocabulary. A detected risk is not a failed detector. */
+export type JoinStatus = "SAFE" | "RISK_DETECTED" | "REPAIR_AVAILABLE" | "REPAIR_APPLIED" | "NOT_CHECKED" | "VALIDATION_ERROR";
+
 export type RadarResult = {
+  /** Internal severity of the query shape (FAIL = fan-out present in this SQL). */
   state: CheckState;
+  status: JoinStatus;
   title: string;
   path: string | null;
   affected: string[];
@@ -52,13 +57,13 @@ export function joinRadar(ast: Node, cteNames: string[]): RadarResult {
   const ctes = new Set(cteNames);
   const selects: Node[] = [];
   collectSelects(ast, selects);
-  if (!selects.length) return { state: "NOT CHECKED", title: "Join safety not fully checked for this query shape.", path: null, affected: [], explanation: "No SELECT found." };
+  if (!selects.length) return { state: "NOT CHECKED", status: "NOT_CHECKED", title: "Join safety not fully checked for this query shape.", path: null, affected: [], explanation: "No SELECT found." };
 
   // Subqueries inside WHERE/expressions are not modelled.
   for (const s of selects) {
     const whereSel: Node[] = [];
     collectSelects(s.where, whereSel);
-    if (whereSel.length) return { state: "NOT CHECKED", title: "Join safety not fully checked for this query shape.", path: null, affected: [], explanation: "Subqueries in WHERE are outside the supported shapes." };
+    if (whereSel.length) return { state: "NOT CHECKED", status: "NOT_CHECKED", title: "Join safety not fully checked for this query shape.", path: null, affected: [], explanation: "Subqueries in WHERE are outside the supported shapes." };
   }
 
   let joinedSafely = false;
@@ -69,7 +74,7 @@ export function joinRadar(ast: Node, cteNames: string[]): RadarResult {
     if (from.length > 1 && children.length >= 2 && hasAggregate(s)) {
       const path = ["schools", ...children].join(" → ");
       return {
-        state: "FAIL",
+        state: "FAIL", status: "RISK_DETECTED",
         title: "Join fan-out: two one-to-many paths joined before aggregation",
         path: `${children[0]} ← schools → ${children[1]}`,
         affected: aggregatedColumns(s),
@@ -79,6 +84,6 @@ export function joinRadar(ast: Node, cteNames: string[]): RadarResult {
     if (from.length > 1) joinedSafely = true;
   }
   return joinedSafely
-    ? { state: "PASS", title: "No join fan-out detected", path: null, affected: [], explanation: "At most one raw one-to-many table per join level; child tables are aggregated before joining." }
-    : { state: "PASS", title: "No joins", path: null, affected: [], explanation: "Single-table query; no fan-out possible." };
+    ? { state: "PASS", status: "SAFE", title: "No join fan-out detected", path: null, affected: [], explanation: "At most one raw one-to-many table per join level; child tables are aggregated before joining." }
+    : { state: "PASS", status: "SAFE", title: "No joins", path: null, affected: [], explanation: "Single-table query; no fan-out possible." };
 }

@@ -1,22 +1,24 @@
 import { Radar } from "lucide-react";
 import type { RunResult } from "@/lib/proofsql/pipeline";
-import { CheckBadge } from "./badges";
+import { JoinBadge } from "./badges";
 import { SqlBlock } from "./ProofCard";
 
 export function JoinRadarPanel({ run }: { run: RunResult }) {
   if (!run.radar) return null;
   const { radar, repair } = run;
   return (
-    <div className={`rounded-lg border p-4 ${radar.state === "FAIL" ? "border-destructive bg-destructive-soft" : "border-border bg-card"}`}>
+    <div className={`rounded-lg border p-4 ${radar.status === "RISK_DETECTED" ? "border-warning bg-warning-soft" : "border-border bg-card"}`}>
       <div className="mb-2 flex items-center gap-2">
         <Radar className="h-4 w-4" aria-hidden />
         <h3 className="text-sm font-semibold">Join Safety Radar</h3>
-        <CheckBadge state={radar.state} />
+        <JoinBadge status={radar.status} />
+        {run.joinStatus && run.joinStatus !== radar.status && <JoinBadge status={run.joinStatus} />}
       </div>
       <p className="text-sm font-medium">{radar.title}</p>
+      {radar.status === "NOT_CHECKED" && <p className="mt-1 text-xs font-medium">Join safety not fully checked for this query shape.</p>}
       {radar.path && <p className="mt-1 font-mono text-xs">Path: {radar.path}</p>}
       <p className="mt-1 text-xs text-muted-foreground">{radar.explanation}</p>
-      {radar.affected.length > 0 && <p className="mt-1 font-mono text-xs">Affected: {[...new Set(radar.affected)].join(", ")}</p>}
+      {radar.affected.length > 0 && <p className="mt-1 font-mono text-xs">Affected metric: {[...new Set(radar.affected)].join(", ")}</p>}
       {repair && (
         <div className="mt-3 space-y-3">
           <p className="text-xs"><span className="font-medium">Observed multiplicity:</span> {repair.multiplicity}</p>

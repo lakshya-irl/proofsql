@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Check, Pencil } from "lucide-react";
+import { Check, Pencil, RotateCcw } from "lucide-react";
 import { useApp } from "@/components/proofsql/AppProvider";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,7 +13,7 @@ export const Route = createFileRoute("/contract")({
       { title: "Semantic Contract — ProofSQL" },
       { name: "description", content: "Human-approved, versioned definitions for enrolment, payment total and academic year." },
       { property: "og:title", content: "Semantic Contract — ProofSQL" },
-      { property: "og:description", content: "Definitions start as drafts and are only used once approved." },
+      { property: "og:description", content: "Approved, versioned definitions; edits become drafts until approved." },
     ],
   }),
   component: ContractPage,
@@ -22,15 +22,18 @@ export const Route = createFileRoute("/contract")({
 const KEYS: DefKey[] = ["enrolment", "payment_total", "academic_year"];
 
 function ContractPage() {
-  const { contract, approve, editDefinition, health } = useApp();
+  const { contract, approve, editDefinition, health, resetContract } = useApp();
   const [editing, setEditing] = useState<DefKey | null>(null);
   const [draft, setDraft] = useState({ meaning: "", expression: "", grain: "" });
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-semibold">Semantic Contract</h1>
-        <p className="text-sm text-muted-foreground">Definitions start as DRAFT and are never used as authoritative until approved. Edits create a new version; earlier runs keep the version they used.</p>
+      <div className="flex flex-wrap items-start gap-3">
+        <div>
+          <h1 className="text-xl font-semibold">Semantic Contract</h1>
+          <p className="text-sm text-muted-foreground">The demo-ready baseline starts with every definition APPROVED v1. Edits create a new DRAFT version that is never used as authoritative until approved; earlier runs keep the version they used.</p>
+        </div>
+        <Button size="sm" variant="outline" className="ml-auto" onClick={() => { if (window.confirm("Restore the approved v1 baseline? Edited versions will be discarded (past runs keep their recorded versions).")) resetContract(); }}><RotateCcw className="h-3 w-3" /> Reset to demo-ready contract</Button>
       </div>
       {KEYS.map((k) => {
         const d = current(contract, k);

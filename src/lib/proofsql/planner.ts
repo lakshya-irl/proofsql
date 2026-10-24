@@ -293,18 +293,20 @@ export function scriptedPlan(question: string): ScriptedCase | null {
       summarize: (rows) => `Completed payment totals for ${rows.length} schools.`,
     };
   }
-  const code = t.match(/district code ([a-z]{3})\b/);
-  if (code) {
+  const codeMatch = t.match(/district codes? ((?:[a-z]{3}(?: and | |$))+)/);
+  if (codeMatch) {
+    const codes = [...new Set(codeMatch[1]!.replace(/ and /g, " ").trim().split(" ").filter(Boolean).map((c) => c.toUpperCase()))];
+    const ph = codes.map(() => "?").join(", ");
     return {
       id: "schools-in-district", definitions: [], rule: "grounded value",
       plan: base({
-        decision: "answer", resolved_question: `Schools whose district_code is '${code[1]!.toUpperCase()}'.`,
+        decision: "answer", resolved_question: `Schools whose district_code is ${codes.map((c) => `'${c}'`).join(" or ")}.`,
         grain: "school", tables: ["schools"], columns: ["school_id", "school_name", "district_code", "school_status"],
-        sql: "SELECT school_id, school_name, district_code, school_status FROM schools WHERE district_code = ? ORDER BY school_id",
-        params: [code[1]!.toUpperCase()],
-        assumptions: ["District matched by exact code chosen by the user."],
+        sql: `SELECT school_id, school_name, district_code, school_status FROM schools WHERE district_code IN (${ph}) ORDER BY district_code, school_id`,
+        params: codes,
+        assumptions: [`District values chosen by the user during value grounding: ${codes.join(", ")}.`, "Schools of every status are listed."],
       }),
-      summarize: (rows) => `${rows.length} schools in district ${code[1]!.toUpperCase()}.`,
+      summarize: (rows) => `${rows.length} schools in district${codes.length > 1 ? "s" : ""} ${codes.join(", ")}.`,
     };
   }
   const place = t.match(/schools? in ([a-z ]+)$/);
@@ -341,11 +343,14 @@ export function scriptedPlan(question: string): ScriptedCase | null {
   return null;
 }
 
+export const SCRIPTED_UNSUPPORTED = "Scripted mode supports predefined questions only. Connect a compliant open-weight model endpoint to enable live arbitrary questions.";
+
 export const DEMO_QUESTIONS = [
   "Which schools performed best?",
   "Which schools had falling enrolment last year?",
   "Which schools had a decrease in distinct active students from academic year 2023–24 to 2024–25?",
   "Compare enrolment and payment totals by school.",
+  "Sum completed payments by school",
   "Which schools will have falling enrolment next year?",
   "What caused enrolment to fall?",
   "Show schools in Jaipur",

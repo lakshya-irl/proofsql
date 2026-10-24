@@ -5,12 +5,13 @@ import { useApp } from "@/components/proofsql/AppProvider";
 import { SchemaPanel } from "@/components/proofsql/SchemaPanel";
 import { ProofCard, ResultTable } from "@/components/proofsql/ProofCard";
 import { JoinRadarPanel } from "@/components/proofsql/JoinRadarPanel";
-import { DecisionBadge } from "@/components/proofsql/badges";
+import { DecisionBadge, JoinBadge, ModeBadge } from "@/components/proofsql/badges";
+import { PrepareDemoButton, ReadinessList } from "@/components/proofsql/PrepareDemo";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DEMO_QUESTIONS } from "@/lib/proofsql/planner";
-import type { RunResult } from "@/lib/proofsql/pipeline";
+import { isAnswer, type RunResult } from "@/lib/proofsql/pipeline";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -25,7 +26,7 @@ export const Route = createFileRoute("/")({
 });
 
 function AskPage() {
-  const { ask, db, mode, livePlanner } = useApp();
+  const { ask, db, mode, livePlanner, modelStatusLabel, model } = useApp();
   const [q, setQ] = useState("");
   const [run, setRun] = useState<RunResult | null>(null);
   const [busy, setBusy] = useState(false);
@@ -40,7 +41,14 @@ function AskPage() {
   const center = (
     <div className="space-y-4">
       <div className="rounded-lg border border-border bg-card p-4">
-        <label htmlFor="q" className="text-sm font-semibold">Ask a question about the demo database</label>
+        <div className="flex flex-wrap items-center gap-2">
+          <label htmlFor="q" className="text-base font-semibold">Ask a question about the demo database</label>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <ModeBadge label={modelStatusLabel} live={mode === "live" && Boolean(livePlanner)} />
+            <span className="text-[11px] text-muted-foreground">Model endpoint: {model ? (model.reachable ? `reachable (${model.modelName})` : "not connected") : "checking…"}</span>
+            <PrepareDemoButton size="sm" />
+          </div>
+        </div>
         <Textarea id="q" value={q} onChange={(e) => setQ(e.target.value)} rows={2} className="mt-2"
           placeholder="e.g. Which schools had falling enrolment last year?"
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void submit(q); } }} />
@@ -61,6 +69,7 @@ function AskPage() {
           </div>
         </div>
       </div>
+      <ReadinessList compact />
       {run ? <Outcome run={run} onAsk={submit} /> : (
         <div className="rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">
           ProofSQL profiles the data first, then decides whether a question can be answered. Results appear here with SQL, warnings and a Proof Card.
@@ -98,7 +107,8 @@ function Outcome({ run, onAsk }: { run: RunResult; onAsk: (q: string) => void })
           <span className="text-xs text-muted-foreground">{run.plannerLabel}</span>
         </div>
         <p className="mt-2 text-base font-medium">{run.summary || run.error}</p>
-        {run.decision === "ANSWER" && <p className="mt-1 text-xs">Confidence: <span className="font-medium">{run.confidence.level}</span> — {run.confidence.reasons[0]}</p>}
+        {run.radar && <p className="mt-1 flex flex-wrap items-center gap-1 text-xs">Join radar: <JoinBadge status={run.radar.status} />{run.joinStatus && run.joinStatus !== run.radar.status && <JoinBadge status={run.joinStatus} />}</p>}
+        {isAnswer(run.decision) && <p className="mt-1 text-xs">Confidence: <span className="font-medium">{run.confidence.level}</span> — {run.confidence.reasons[0]}</p>}
         {run.decision === "CLARIFY" && (
           <div className="mt-3 space-y-2">
             <ul className="space-y-1">{run.clarifications.map((c) => <li key={c} className="flex gap-2 text-sm"><CircleHelp className="mt-0.5 h-4 w-4 shrink-0 text-warning" aria-hidden />{c}</li>)}</ul>
