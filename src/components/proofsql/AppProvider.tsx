@@ -9,6 +9,7 @@ import { analyzeQuestion, getModelStatus, type ModelStatus } from "@/lib/model.f
 import { EVAL_CASES } from "@/lib/proofsql/evaluation";
 import { scriptedPlan } from "@/lib/proofsql/planner";
 import { UNKNOWN_READINESS, readinessFromStatus, reuseCached, statusLabel, type PlannerReadiness } from "@/lib/proofsql/readiness";
+import { LEGACY_RUN_KEYS, mergeRuns, parseRuns, type Skipped } from "@/lib/proofsql/runHistory";
 
 export type ReadinessItem = { label: string; state: "ok" | "warn" | "fail" | "not-run"; detail: string };
 export type Readiness = { at: string; items: ReadinessItem[] };
@@ -23,6 +24,9 @@ type Ctx = {
   prepareDemo: (clearHistory: boolean) => Promise<Readiness>; readiness: Readiness | null; preparing: boolean;
   /** Shared planner readiness: the only source for live/scripted labels on every page. */
   planner: PlannerReadiness;
+  importRuns: (text: string) => { added: number; duplicates: number; skipped: Skipped[] };
+  clearRuns: () => void;
+  legacyReport: { migrated: number; skipped: Skipped[] } | null;
 };
 
 // Kept on globalThis so a hot reload of this file reuses the same context instead of orphaning consumers.
@@ -54,6 +58,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [lastFailCheck, setLastFail] = useState<string | null>(null);
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const [preparing, setPreparing] = useState(false);
+  const [legacyReport, setLegacyReport] = useState<{ migrated: number; skipped: Skipped[] } | null>(null);
 
   const load = useCallback(async (): Promise<{ d: Database; h: Health } | null> => {
     try {
@@ -93,7 +98,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let savedMode: string | null = null;
     try {
       const c = localStorage.getItem(LS.contract); if (c) setContract(JSON.parse(c));
-      const r = localStorage.getItem(LS.runs); if (r) setRuns(JSON.parse(r));
+      const r = localStorage.getItem(LS.runs);
+      let current = r ? parseRuns(r).runs : [];
+      // Legacy storage: migrate what validates, report what was skipped, never invent missing detail.
+      for (const key of LEGACY_RUN_KEYS) {
+        const old = localStorage.getItem(key); if (!old) continue;
+        const rep = parseRuns(old);
+        current = mergeRuns(current, rep.runs).runs;
+        setLegacyReport({ migrated: rep.runs.length, skipped: rep.skipped });
+        localStorage.removeItem(key);
+      }
+      setRuns(current);
       savedMode = localStorage.getItem(LS.mode); if (savedMode === "live" || savedMode === "scripted") setModeState(savedMode);
       setLastOk(localStorage.getItem(LS.ok));
       setLastFail(localStorage.getItem(LS.fail));
@@ -166,12 +181,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return r;
   };
 
+  const importRuns = (text: string) => {
+    const rep = parseRuns(text);
+    const merged = mergeRuns(runs, rep.runs);
+    setRuns(merged.runs);
+    return { added: rep.runs.length - merged.duplicates, duplicates: merged.duplicates, skipped: rep.skipped };
+  };
+  const clearRuns = () => setRuns([]);
+
   const value = useMemo<Ctx>(() => ({
     db, dbError, health, loadedAt, contract, runs, mode, model, lastOkCheck, checking,
     setMode, resetDataset, refreshModel, approve, editDefinition, ask, livePlanner, modelStatusLabel,
-    lastFailCheck, resetContract, prepareDemo, readiness, preparing, planner,
+    lastFailCheck, resetContract, prepareDemo, readiness, preparing, planner, importRuns, clearRuns, legacyReport,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [db, dbError, health, loadedAt, contract, runs, mode, model, lastOkCheck, checking, modelStatusLabel, lastFailCheck, readiness, preparing, planner]);
+  }), [db, dbError, health, loadedAt, contract, runs, mode, model, lastOkCheck, checking, modelStatusLabel, lastFailCheck, readiness, preparing, planner, legacyReport]);
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }
