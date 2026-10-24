@@ -84,18 +84,18 @@ function CovidPage() {
 
   return (
     <div className="max-w-4xl space-y-4">
-      <h1 className="text-xl font-semibold">COVID-19 data (real)</h1>
+      <h1 className="text-xl font-semibold">Explore COVID-19 data</h1>
       <p className="rounded border border-border bg-muted p-3 text-xs">
-        Real public data: {COVID_SOURCE}. 198 countries, Jan 2020 – Apr 2022, one row per country per month (the last reported day). The school demo on Ask &amp; Verify is unchanged — switch between them in the sidebar.
+        Real public data: {COVID_SOURCE}. 198 countries, Jan 2020 – Apr 2022, one row per country per month (the last reported day). These are historical figures, not current totals.
       </p>
       {err && <p className="text-sm text-destructive">Could not load the COVID database: {err}</p>}
       {!db && !err && <p className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading database…</p>}
       {db && (
         <section className="space-y-2 rounded-lg border border-border bg-card p-4">
-          <label className="block text-xs">Ask in your own words (uses the live AI; it only picks a question type, the app writes the SQL)
+          <label className="block text-xs">Ask in your own words
             <textarea value={text} onChange={(e) => setText(e.target.value)} maxLength={500} rows={2} className={sel} placeholder="How many deaths did Brazil have by June 2021?" />
           </label>
-          <Button onClick={() => void askText()} disabled={thinking || !text.trim()}>{thinking ? <><Loader2 className="h-4 w-4 animate-spin" /> Asking the AI…</> : "Ask AI"}</Button>
+          <Button onClick={() => void askText()} disabled={thinking || !text.trim()}>{thinking ? <><Loader2 className="h-4 w-4 animate-spin" /> Checking…</> : "Ask & verify"}</Button>
         </section>
       )}
       {db && (
@@ -110,20 +110,20 @@ function CovidPage() {
           {kind === "change" && monthSel(from, setFrom, "From month")}
           {monthSel(month, setMonth, kind === "change" ? "To month" : "Month")}
           {kind === "top" && <label className="block text-xs">How many<input type="number" min={1} max={50} className={sel} value={n} onChange={(e) => setN(Number(e.target.value))} /></label>}
-          <div className="sm:col-span-2"><Button onClick={ask}>Ask menu question</Button></div>
+          <div className="sm:col-span-2"><Button onClick={ask}>Show results</Button></div>
         </section>
       )}
       {out && (
         <section className="space-y-2 rounded-lg border border-border bg-card p-4 text-sm">
           <div className="font-semibold">{out.plan.decision}{out.plan.decision === "ANSWER" && ` · ${out.rows.length} row(s) · ${out.ms.toFixed(1)} ms`}</div>
-          {out.via && <div className="break-all text-xs text-muted-foreground">{out.via}</div>}
+          {out.via && <details className="text-xs text-muted-foreground"><summary className="cursor-pointer">Processing details</summary>{out.via}</details>}
           {out.plan.decision !== "ANSWER" ? <p>{out.plan.reason} No query was run.</p> : (
             <>
               {out.rows.length === 0 && <p>No matching rows — nothing was reported for this choice.</p>}
               <ul className="list-disc pl-5 text-xs text-muted-foreground">{out.plan.warnings.map((w) => <li key={w}>{w}</li>)}</ul>
               <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="text-left text-muted-foreground">{out.cols.map((c) => <th key={c} className="pr-2">{c}</th>)}</tr></thead>
                 <tbody>{out.rows.map((r, i) => <tr key={i} className="border-t border-border">{r.map((v, j) => <td key={j} className="pr-2">{v === null ? "missing" : typeof v === "number" ? v.toLocaleString() : String(v)}</td>)}</tr>)}</tbody></table></div>
-              <pre className="overflow-x-auto whitespace-pre-wrap rounded bg-muted p-2 text-xs">{out.plan.sql}{"\n"}-- parameters: {JSON.stringify(out.plan.params)}</pre>
+              <details><summary className="cursor-pointer text-xs">Query details</summary><pre className="overflow-x-auto whitespace-pre-wrap rounded bg-muted p-2 text-xs">{out.plan.sql}{"\n"}-- parameters: {JSON.stringify(out.plan.params)}</pre></details>
             </>
           )}
         </section>
