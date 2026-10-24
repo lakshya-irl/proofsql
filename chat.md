@@ -170,3 +170,4 @@ _Last updated: 2026-10-24_
 
 ## 2026-10-24
 - Removed sign-in from the site per Lakshya: Settings account panel and "Approve shared definition" buttons removed; local approvals on Contract remain open to everyone. Server role functions kept unused. src/pages/Index.tsx does not exist (error not reproducible).
+- Restored emptied vite.config.ts and vitest.config.ts (preview had stopped starting).
