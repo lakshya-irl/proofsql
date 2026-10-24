@@ -8,6 +8,7 @@ import { runPipeline, type LiveRequest, type LiveResponse, type Mode, type RunRe
 import { analyzeQuestion, getModelStatus, type ModelStatus } from "@/lib/model.functions";
 import { EVAL_CASES } from "@/lib/proofsql/evaluation";
 import { scriptedPlan } from "@/lib/proofsql/planner";
+import { UNKNOWN_READINESS, readinessFromStatus, reuseCached, statusLabel, type PlannerReadiness } from "@/lib/proofsql/readiness";
 
 export type ReadinessItem = { label: string; state: "ok" | "warn" | "fail" | "not-run"; detail: string };
 export type Readiness = { at: string; items: ReadinessItem[] };
@@ -20,13 +21,15 @@ type Ctx = {
   ask: (q: string) => Promise<RunResult>; livePlanner: ((r: LiveRequest) => Promise<LiveResponse>) | undefined;
   modelStatusLabel: string; lastFailCheck: string | null; resetContract: () => void;
   prepareDemo: (clearHistory: boolean) => Promise<Readiness>; readiness: Readiness | null; preparing: boolean;
+  /** Shared planner readiness: the only source for live/scripted labels on every page. */
+  planner: PlannerReadiness;
 };
 
 // Kept on globalThis so a hot reload of this file reuses the same context instead of orphaning consumers.
 const g = globalThis as unknown as { __proofsqlCtx?: React.Context<Ctx | null> };
 const AppCtx = (g.__proofsqlCtx ??= createContext<Ctx | null>(null));
 // contract key v2: the demo-ready baseline (APPROVED v1) replaces older draft-only state.
-const LS = { contract: "proofsql.contract.v2", runs: "proofsql.runs.v2", mode: "proofsql.mode.v1", ok: "proofsql.lastok.v1", fail: "proofsql.lastfail.v1" };
+const LS = { contract: "proofsql.contract.v2", runs: "proofsql.runs.v2", mode: "proofsql.mode.v1", ok: "proofsql.lastok.v1", fail: "proofsql.lastfail.v1", planner: "proofsql.planner.v1" };
 
 async function createDb(): Promise<Database> {
   const initSqlJs = (await import("sql.js")).default;
@@ -73,9 +76,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       s = await getModelStatus();
     } catch (e) {
-      s = { configured: false, reachable: false, modelName: "unknown", maxParams: "UNKNOWN", withinLimit: false, endpointHost: null, checkedAt: new Date().toISOString(), error: e instanceof Error ? e.message : "Status check failed", latencyMs: null, providerLabel: "unknown", openWeight: "UNKNOWN", fallback: false, transport: "NOT CHECKED", chat: "NOT CHECKED", planner: "NOT CHECKED", eligible: false };
+      s = { configured: false, reachable: false, modelName: "unknown", maxParams: "UNKNOWN", withinLimit: false, endpointHost: null, checkedAt: new Date().toISOString(), error: e instanceof Error ? e.message : "Status check failed", latencyMs: null, providerLabel: "unknown", openWeight: "UNKNOWN", fallback: false, transport: "NOT CHECKED", chat: "NOT CHECKED", planner: "NOT CHECKED", eligible: false, configFingerprint: "" };
     }
     setModel(s);
+    // Cached readiness from an older provider/model/config is never reused.
+    const cached = (() => { try { return JSON.parse(localStorage.getItem(LS.planner) ?? "null") as PlannerReadiness | null; } catch { return null; } })();
+    if (reuseCached(cached, s.configFingerprint) === UNKNOWN_READINESS) localStorage.removeItem(LS.planner);
+    localStorage.setItem(LS.planner, JSON.stringify(readinessFromStatus(s)));
     if (s.reachable) { setLastOk(s.checkedAt); localStorage.setItem(LS.ok, s.checkedAt); }
     else { setLastFail(s.checkedAt); localStorage.setItem(LS.fail, s.checkedAt); }
     setChecking(false);
@@ -110,12 +117,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const editDefinition = (k: DefKey, patch: Partial<DefVersion>) => setContract((c) => withEdit(c, k, patch));
   const resetContract = () => setContract(DEFAULT_CONTRACT());
 
-  const liveReady = Boolean(model?.eligible);
+  // Fresh session: explicit unknowns until this session's health check returns.
+  const planner = useMemo(() => (model ? readinessFromStatus(model) : UNKNOWN_READINESS), [model]);
+  const liveReady = planner.eligibleForLive;
   const livePlanner = liveReady ? async (req: LiveRequest) => analyzeQuestion({ data: req }) : undefined;
-  const modelStatusLabel = mode === "scripted"
-    ? "Scripted planner — no live model inference"
-    : liveReady ? `Live · planner verified — ${model!.modelName}`
-    : model?.transport === "PASS" ? `Live · transport only — ${model.modelName}` : "Model unavailable";
+  const modelStatusLabel = statusLabel(mode, planner);
 
   const ask = async (q: string) => {
     if (!db) throw new Error("Database not loaded");
@@ -163,9 +169,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const value = useMemo<Ctx>(() => ({
     db, dbError, health, loadedAt, contract, runs, mode, model, lastOkCheck, checking,
     setMode, resetDataset, refreshModel, approve, editDefinition, ask, livePlanner, modelStatusLabel,
-    lastFailCheck, resetContract, prepareDemo, readiness, preparing,
+    lastFailCheck, resetContract, prepareDemo, readiness, preparing, planner,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [db, dbError, health, loadedAt, contract, runs, mode, model, lastOkCheck, checking, modelStatusLabel, lastFailCheck, readiness, preparing]);
+  }), [db, dbError, health, loadedAt, contract, runs, mode, model, lastOkCheck, checking, modelStatusLabel, lastFailCheck, readiness, preparing, planner]);
 
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }

@@ -15,7 +15,7 @@ const NAV = [
 ] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { mode, modelStatusLabel, dbError, db } = useApp();
+  const { mode, modelStatusLabel, dbError, db, planner } = useApp();
   return (
     <div className="flex min-h-screen flex-col bg-background lg:flex-row">
       <aside className="bg-sidebar text-sidebar-foreground lg:sticky lg:top-0 lg:h-screen lg:w-60 lg:shrink-0">
@@ -41,7 +41,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex flex-wrap items-center gap-2 border-b border-border bg-card px-4 py-2 text-xs">
-          <ModeBadge label={modelStatusLabel} live={mode === "live" && modelStatusLabel.startsWith("Live · planner verified")} />
+          <ModeBadge label={modelStatusLabel} live={mode === "live" && planner.eligibleForLive} />
           <span className="text-muted-foreground">
             {dbError ? <span className="text-destructive">Database failed to load: {dbError}</span> : db ? "Demo SQLite loaded in browser (read-only queries)" : "Loading demo database…"}
           </span>

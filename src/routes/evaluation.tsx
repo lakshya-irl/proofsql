@@ -8,6 +8,7 @@ import { EVAL_CASES, runEvaluation, summarize, type EvalOutcome } from "@/lib/pr
 import { DEFAULT_CONTRACT, current } from "@/lib/proofsql/contract";
 import { FIXTURE_VERSION } from "@/lib/proofsql/schema";
 import { SqlBlock } from "@/components/proofsql/ProofCard";
+import { runModeOf } from "@/lib/proofsql/readiness";
 
 export const Route = createFileRoute("/evaluation")({
   head: () => ({
@@ -24,10 +25,11 @@ export const Route = createFileRoute("/evaluation")({
 const flag = (v: boolean | null) => (v === null ? <span className="text-muted-foreground">n/a</span> : <CheckBadge state={v ? "PASS" : "FAIL"} />);
 
 function EvalPage() {
-  const { db, contract, mode, model, modelStatusLabel, livePlanner, prepareDemo, preparing } = useApp();
+  const { db, contract, mode, planner, modelStatusLabel, livePlanner, prepareDemo, preparing } = useApp();
   const [res, setRes] = useState<EvalOutcome[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [ranAt, setRanAt] = useState<string | null>(null);
+  const [ranWith, setRanWith] = useState<{ mode: string; label: string } | null>(null);
   const drafts = (["enrolment", "payment_total", "academic_year"] as const).filter((k) => current(contract, k).status !== "APPROVED");
   const liveBlocked = mode === "live" && !livePlanner;
 
@@ -35,8 +37,9 @@ function EvalPage() {
     if (!db) return;
     setBusy(true);
     try {
-      setRes(await runEvaluation({ db, contract: useBaseline ? DEFAULT_CONTRACT() : contract, mode, modelName: model?.modelName ?? "Qwen/Qwen2.5-Coder-7B-Instruct", modelStatus: modelStatusLabel, livePlanner }));
+      setRes(await runEvaluation({ db, contract: useBaseline ? DEFAULT_CONTRACT() : contract, mode, modelName: planner.model ?? "Qwen/Qwen2.5-Coder-7B-Instruct", modelStatus: modelStatusLabel, livePlanner }));
       setRanAt(new Date().toISOString());
+      setRanWith({ mode, label: modelStatusLabel });
     } finally { setBusy(false); }
   };
   const resetAndRun = async () => {
@@ -48,28 +51,34 @@ function EvalPage() {
   const metrics = res ? summarize(res) : [];
   const failed = res?.filter((o) => !o.passed) ?? [];
   const targetMet = res && failed.length === 0 && res.length === EVAL_CASES.length;
+  const LIVE_IDS = ["A1", "A2", "A3", "J1", "J2"];
+  const liveUsed = res?.filter((o) => o.run.liveInference).map((o) => o.c.id) ?? [];
+  // "Live" headline only when every model-dependent case really used live inference.
+  const fullyLive = Boolean(res) && LIVE_IDS.every((id) => liveUsed.includes(id));
+  const runKind = !res ? null : fullyLive ? "Live provider" : liveUsed.length ? "Partial live (some cases without inference)" : "Scripted baseline";
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start gap-3">
         <div>
           <h1 className="text-xl font-semibold">Evaluation Lab</h1>
-          <p className="text-sm text-muted-foreground">{EVAL_CASES.length} cases run through the full pipeline. Mode <span className="font-medium">{mode}</span> · fixture <span className="font-mono">{FIXTURE_VERSION}</span>. A small local fixture does not prove generalization.</p>
+          <p className="text-sm text-muted-foreground">{EVAL_CASES.length} cases run through the full pipeline. Current status <span className="font-medium">{modelStatusLabel}</span> · fixture <span className="font-mono">{FIXTURE_VERSION}</span>. A small local fixture does not prove generalization.</p>
         </div>
         <div className="ml-auto flex flex-wrap gap-2">
           <Button variant="outline" onClick={resetAndRun} disabled={busy || preparing || liveBlocked}>{preparing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />} Reset and prepare evaluation</Button>
           <Button onClick={() => run()} disabled={!db || busy || liveBlocked}>{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} Run evaluation</Button>
         </div>
       </div>
-      {mode === "scripted" && <p className="rounded border border-warning bg-warning-soft p-2 text-xs text-warning-foreground">Scripted planner — no live model inference. These results measure the validation pipeline with scripted plans and are not live-model accuracy.</p>}
+      {!planner.eligibleForLive && mode === "live" && <p className="rounded border border-warning bg-warning-soft p-2 text-xs text-warning-foreground">Live planner not verified{planner.errorCode ? ` (${planner.errorCode})` : ""}. Live runs are disabled; switch to scripted in Settings.</p>}
+      {mode === "scripted" && <p className="rounded border border-warning bg-warning-soft p-2 text-xs text-warning-foreground">Scripted · no live model inference. These results measure the validation pipeline with scripted plans and are not live-model accuracy.</p>}
       {liveBlocked && <p className="text-xs text-destructive">Live mode is selected but the model endpoint is not connected.</p>}
       {drafts.length > 0 && <p className="text-xs text-warning-foreground">Draft definitions ({drafts.join(", ")}) make governed answer cases return CLARIFY. Use "Reset and prepare evaluation" to restore the approved baseline.</p>}
 
       {res && (
         <>
-          <div className="text-xs text-muted-foreground">Planner: {modelStatusLabel} · Model: <span className="font-mono">{model?.modelName}</span> · Run at {ranAt && new Date(ranAt).toLocaleString()} · Average latency {Math.round(res.reduce((a, o) => a + o.ms, 0) / res.length)} ms</div>
+          <div className="text-xs text-muted-foreground"><span className="font-semibold text-foreground">{runKind}</span> · Live inference used in {liveUsed.length}/{res.length} cases{liveUsed.length ? ` (${liveUsed.join(", ")})` : ""} · Status at run: {ranWith?.label} · Model: <span className="font-mono">{fullyLive || liveUsed.length ? res.find((o) => o.run.liveInference)?.run.modelName : "none (scripted)"}</span> · Run at {ranAt && new Date(ranAt).toLocaleString()} · Average latency {Math.round(res.reduce((a, o) => a + o.ms, 0) / res.length)} ms</div>
           {targetMet
-            ? <p className="rounded border border-success bg-success-soft p-2 text-xs text-success">All {res.length} cases passed: 3/3 answerable, 4/4 clarification (incl. value grounding), 3/3 abstention, 2/2 join-risk detected, 1/1 security block, 0 unsupported answers.</p>
+            ? <p className="rounded border border-success bg-success-soft p-2 text-xs text-success">{runKind}: all {res.length} cases passed: 3/3 answerable, 4/4 clarification (incl. value grounding), 3/3 abstention, 2/2 join-risk detected, 1/1 security block, 0 unsupported answers.</p>
             : <p className="rounded border border-destructive bg-destructive-soft p-2 text-xs text-destructive">{failed.length} case(s) failed: {failed.map((o) => o.c.id).join(", ")}. See highlighted rows below.</p>}
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {metrics.map((m) => {
@@ -88,7 +97,7 @@ function EvalPage() {
 
       <div className="overflow-auto rounded-lg border border-border bg-card">
         <table className="w-full text-xs">
-          <thead className="bg-muted"><tr>{["ID", "Category", "Question", "Expected", "Actual", "Decision", "Semantic answer", "Warnings", "Join radar", "Join status", "Security", "Overall", "ms"].map((h) => <th key={h} className="px-2 py-1.5 text-left font-medium">{h}</th>)}</tr></thead>
+          <thead className="bg-muted"><tr>{["ID", "Category", "Question", "Expected", "Actual", "Decision", "Semantic answer", "Warnings", "Join radar", "Join status", "Security", "Inference used", "Mode", "Provider", "Model", "Error code", "Overall", "ms"].map((h) => <th key={h} className="px-2 py-1.5 text-left font-medium">{h}</th>)}</tr></thead>
           <tbody>{EVAL_CASES.map((c) => {
             const o = res?.find((x) => x.c.id === c.id);
             return (
@@ -103,11 +112,16 @@ function EvalPage() {
                   <td className="px-2 py-1.5">{o ? flag(o.joinOk) : "—"}</td>
                   <td className="px-2 py-1.5">{o?.run.radar ? <div className="flex flex-col gap-1"><JoinBadge status={o.run.radar.status} />{o.run.joinStatus && o.run.joinStatus !== o.run.radar.status && <JoinBadge status={o.run.joinStatus} />}</div> : <span className="text-muted-foreground">n/a</span>}</td>
                   <td className="px-2 py-1.5">{o ? flag(o.securityOk) : "—"}</td>
+                  <td className="px-2 py-1.5">{o ? (o.run.liveInference ? "Yes" : "No") : "—"}</td>
+                  <td className="px-2 py-1.5">{o ? runModeOf(o.run) : "—"}</td>
+                  <td className="px-2 py-1.5">{o ? (o.run.liveInference ? planner.provider ?? "unknown" : "—") : "—"}</td>
+                  <td className="px-2 py-1.5 font-mono">{o ? (o.run.liveInference ? o.run.modelName : "—") : "—"}</td>
+                  <td className="px-2 py-1.5 font-mono">{o?.run.errorCode ?? "—"}</td>
                   <td className="px-2 py-1.5">{o ? <CheckBadge state={o.passed ? "PASS" : "FAIL"} /> : "—"}</td>
                   <td className="px-2 py-1.5 font-mono">{o?.ms ?? "—"}</td>
                 </tr>
                 {(c.reference || c.expectedWarnings) && (
-                  <tr className="border-t border-border/50"><td colSpan={13} className="px-2 pb-2">
+                  <tr className="border-t border-border/50"><td colSpan={18} className="px-2 pb-2">
                     <details>
                       <summary className="cursor-pointer text-[11px] text-muted-foreground">Debugging trace{c.expectedWarnings ? ` · expected warnings: ${c.expectedWarnings.join(", ")}` : ""}</summary>
                       {c.reference && <div className="mt-1"><p className="mb-1 text-[11px] text-muted-foreground">Reference SQL (debugging only — correctness compares normalized result rows on columns {c.compare?.join(", ")}):</p><SqlBlock sql={c.reference} /></div>}
