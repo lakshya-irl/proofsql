@@ -11,7 +11,7 @@ const str = (v: unknown) => (typeof v === "string" ? v : null);
 /** Returns a complete RunResult or a reason. Missing optional detail becomes empty, never invented. */
 export function normalizeRun(raw: unknown): RunResult | string {
   if (!raw || typeof raw !== "object") return "not an object";
-  const r = raw as Record<string, unknown>;
+  const r = raw as Partial<Record<keyof RunResult, unknown>>;
   if (!str(r.id)) return "missing run id";
   if (!str(r.question)) return "missing question";
   if (!str(r.timestamp) || Number.isNaN(Date.parse(r.timestamp as string))) return "missing or invalid timestamp";
