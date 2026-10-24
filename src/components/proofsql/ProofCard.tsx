@@ -93,7 +93,7 @@ export function ProofCard({ run }: { run: RunResult }) {
           <dt className="text-muted-foreground">Dataset</dt><dd>{run.datasetName}</dd>
           <dt className="text-muted-foreground">Snapshot</dt><dd className="font-mono">{run.snapshotId}</dd>
           <dt className="text-muted-foreground">Planner</dt><dd>{run.plannerLabel}</dd>
-          <dt className="text-muted-foreground">Model</dt><dd className="font-mono">{run.modelName}</dd>
+          <dt className="text-muted-foreground">Model</dt><dd className="font-mono">{run.liveInference ? run.modelName : "none used for this run"}</dd>
           <dt className="text-muted-foreground">Model mode</dt><dd>{run.mode}{run.liveInference ? " · live inference" : " · no live model inference"}{run.modelLatencyMs != null ? ` · model ${run.modelLatencyMs} ms` : ""}</dd>
           <dt className="text-muted-foreground">Model status</dt><dd>{run.modelStatus}</dd>
           <dt className="text-muted-foreground">Contract</dt><dd>{run.definitions.length ? run.definitions.map((d) => `${d.title} v${d.version} (${d.status})`).join(", ") : "No governed definition used"}</dd>
