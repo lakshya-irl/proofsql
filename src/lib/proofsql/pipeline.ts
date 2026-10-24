@@ -3,7 +3,8 @@ import type { Database, SqlValue } from "sql.js";
 import { runQuery } from "./db";
 import { checkSql, type Check } from "./firewall";
 import { joinRadar, type JoinStatus, type RadarResult } from "./joinRadar";
-import { PlanSchema, SCRIPTED_UNSUPPORTED, guard, scriptedPlan, type Plan, type ScriptedCase, type Suggestion } from "./planner";
+import { PlanSchema, SCRIPTED_UNSUPPORTED, scriptedPlan, type Plan, type ScriptedCase, type Suggestion } from "./planner";
+import { LivePlanSchema, compileLivePlan, precheck, type ErrorCode } from "./livePlan";
 import { current, type Contract, type DefKey, type DefVersion } from "./contract";
 import { DATASET_NAME, SNAPSHOT_ID, YEAR_RULES, allColumns, tableNames } from "./schema";
 
@@ -38,9 +39,19 @@ export type RunResult = {
   executionMs: number | null; confidence: { level: "High confidence" | "Review required" | "Insufficient evidence" | "Not applicable"; reasons: string[] };
   limitations: string[]; summary: string; error: string | null;
   joinStatus: JoinStatus | null; liveInference: boolean; modelLatencyMs: number | null; latencyMs: number | null;
+  errorCode?: ErrorCode | null; developerTrace?: string | null;
 };
 
 export const ROW_LIMIT = 200;
+
+const redact = (s: string) => s.replace(/(bearer\s+)\S+/gi, "$1[redacted]").replace(/\b(sk|AIza|sb_secret)[-_A-Za-z0-9]{8,}/g, "[redacted]").slice(0, 2000);
+function fail(r: RunResult, code: ErrorCode, message: string, trace?: string): RunResult {
+  r.decision = "ERROR"; r.errorCode = code; r.sql = null; r.result = null;
+  r.error = `${message} (code ${code}). Nothing was executed; you can retry.`;
+  r.summary = r.error;
+  r.developerTrace = trace ? redact(trace) : null;
+  return r;
+}
 
 export type PipelineInput = {
   question: string; mode: Mode; contract: Contract; db: Database;
@@ -134,28 +145,38 @@ async function runInner(input: PipelineInput): Promise<RunResult> {
       }
       plan = sc.plan;
     } else {
-      sc = guard(question);
+      sc = precheck(question);
       if (sc) {
         plan = sc.plan;
-        r.plannerLabel += " (deterministic guard applied before model)";
+        r.plannerLabel = "No live model inference — deterministic safety/answerability guard";
       } else {
-        if (!input.livePlanner) throw new Error("Model endpoint not connected.");
-        const resp = await input.livePlanner(liveRequest(db, question, mode, contract));
+        if (!input.livePlanner) return fail(r, "PROVIDER_HTTP_ERROR", "Model endpoint not connected.");
+        let resp: LiveResponse;
+        try { resp = await input.livePlanner(liveRequest(db, question, mode, contract)); }
+        catch (e) {
+          const msg = e instanceof Error ? e.message : "Provider error";
+          const m = msg.match(/\b([A-Z_]{6,}): (.*)/);
+          return fail(r, (m?.[1] as ErrorCode) ?? "PROVIDER_HTTP_ERROR", m?.[2] ?? "Model request failed.");
+        }
         r.liveInference = true; r.modelLatencyMs = resp.latencyMs; r.modelName = resp.modelName;
-        r.plannerLabel = `Live model inference: ${resp.modelName} (${resp.latencyMs} ms)`;
+        r.plannerLabel = `Live model plan: ${resp.modelName} (${resp.latencyMs} ms) → deterministic compiler`;
         const raw = resp.content;
         let obj: unknown = null;
         try { obj = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1)); } catch { /* handled below */ }
-        const parsed = PlanSchema.safeParse(obj);
+        if (obj === null) return fail(r, "INVALID_JSON", "The model did not return valid JSON.", raw);
+        const parsed = LivePlanSchema.safeParse(obj);
         if (!parsed.success) {
           checks.push({ name: "Plan schema valid", state: "FAIL", detail: parsed.error.issues.slice(0, 3).map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") });
-          r.decision = "ERROR"; r.error = "Model returned a plan that failed schema validation."; return r;
+          return fail(r, "PLAN_SCHEMA_INVALID", "The model's plan did not match the required structure.", raw);
         }
-        plan = parsed.data;
+        const compiled = compileLivePlan(parsed.data, question);
+        if (!compiled.ok) return fail(r, compiled.code, compiled.message, raw);
+        sc = compiled.sc; plan = sc.plan;
+        checks.push({ name: "Live plan compiled", state: "PASS", detail: `Model plan (${parsed.data.decision}) compiled deterministically to app-authored query shape "${sc.id}". No model SQL was used.` });
       }
     }
   } catch (e) {
-    r.decision = "ERROR"; r.error = e instanceof Error ? e.message : "Planner failed"; return r;
+    return fail(r, "PROVIDER_HTTP_ERROR", e instanceof Error ? e.message : "Planner failed");
   }
   checks.push({ name: "Plan schema valid", state: "PASS", detail: mode === "scripted" ? "Scripted plan validated against runtime schema." : "Model JSON validated against runtime schema." });
   PlanSchema.parse(plan);
@@ -199,6 +220,8 @@ async function runInner(input: PipelineInput): Promise<RunResult> {
       r.blockedReasons = [...(plan.abstain_reason ? [plan.abstain_reason] : []), ...fw.reasons];
       r.summary = r.decision === "BLOCKED" ? "Blocked by the read-only SQL firewall. Nothing was executed." : "SQL parser failure; nothing was executed.";
       r.error = r.decision === "ERROR" ? fw.parseError : null;
+      if (r.decision === "BLOCKED") r.sql = null; // destructive SQL is withheld
+      else r.errorCode = "SQL_AST_REJECTED";
       return r;
     }
     // Plan-declared tables/columns must also exist

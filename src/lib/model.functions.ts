@@ -1,64 +1,112 @@
-// Server-side proxy to the configured open-weight model. The API key never reaches the browser.
+// Server-side provider adapter for OpenAI-compatible endpoints. The API key never reaches the browser.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { LivePlanSchema, buildPlannerPrompt } from "@/lib/proofsql/livePlan";
 
 const DEFAULT_MODEL = "Qwen/Qwen2.5-Coder-7B-Instruct";
-const HEALTH_TIMEOUT_MS = 8000;
+const PROBE_TIMEOUT_MS = 15000;
 const PLAN_TIMEOUT_MS = 45000;
 
-// Live mode uses the built-in Lovable AI connection (owner decision: the 8B limit is dropped because no ≤8B host worked).
-// The UI always shows the real model name below; it is never relabelled.
+// Lovable AI connection (owner decision while no ≤8B host works). Hosted proprietary model:
+// shown as a fallback provider that does not satisfy the open-weight constraint.
 const GATEWAY_URL = "https://ai.gateway.lovable.dev/v1";
 const GATEWAY_MODEL = "google/gemini-3-flash-preview";
 
-function config() {
+type Cfg = { baseUrl: string; apiKey: string; modelName: string; maxParams: string; withinLimit: boolean; providerLabel: string; openWeight: "PASS" | "FAIL" | "UNKNOWN"; fallback: boolean; gateway: boolean };
+
+function config(): Cfg {
   const gatewayKey = process.env["LOVABLE_API_KEY"] ?? "";
-  if (gatewayKey) return { baseUrl: GATEWAY_URL, apiKey: gatewayKey, modelName: GATEWAY_MODEL, maxParams: "n/a (hosted)", withinLimit: true };
-  const baseUrl = process.env["MODEL_BASE_URL"] ?? "";
-  const apiKey = process.env["MODEL_API_KEY"] ?? "";
-  const modelName = process.env["MODEL_NAME"] || DEFAULT_MODEL;
-  const maxParams = process.env["MODEL_MAX_PARAMETERS"] || "8B";
+  if (gatewayKey) return { baseUrl: GATEWAY_URL, apiKey: gatewayKey, modelName: GATEWAY_MODEL, maxParams: "UNKNOWN", withinLimit: true, providerLabel: "Lovable AI Gateway (hosted Google model)", openWeight: "FAIL", fallback: true, gateway: true };
+  const baseUrl = (process.env["MODEL_BASE_URL"] ?? "").replace(/\/$/, "");
+  const maxParams = process.env["MODEL_MAX_PARAMETERS"] || "UNKNOWN";
   const limit = parseFloat(maxParams);
-  return { baseUrl: baseUrl.replace(/\/$/, ""), apiKey, modelName, maxParams, withinLimit: Number.isFinite(limit) && limit <= 8 };
+  const ow = (process.env["MODEL_IS_OPEN_WEIGHT"] ?? "").toLowerCase();
+  return {
+    baseUrl, apiKey: process.env["MODEL_API_KEY"] ?? "", modelName: process.env["MODEL_NAME"] || DEFAULT_MODEL, maxParams,
+    withinLimit: Number.isFinite(limit) && limit <= 8, providerLabel: process.env["MODEL_PROVIDER_LABEL"] || "OpenAI-compatible endpoint",
+    openWeight: ow === "true" ? "PASS" : ow === "false" ? "FAIL" : "UNKNOWN", fallback: false, gateway: false,
+  };
 }
 
-const authHeaders = (apiKey: string): Record<string, string> => (apiKey ? { Authorization: `Bearer ${apiKey}` } : {});
+function headers(c: Cfg): Record<string, string> {
+  const h: Record<string, string> = { "Content-Type": "application/json" };
+  if (c.apiKey) h["Authorization"] = `Bearer ${c.apiKey}`;
+  return h;
+}
 
+/** Error messages are prefixed with a stable code and never contain secrets. */
+class CodedError extends Error { constructor(code: string, msg: string) { super(`${code}: ${msg}`); } }
+
+async function chat(c: Cfg, messages: { role: string; content: string }[], timeoutMs: number): Promise<{ content: string; latencyMs: number }> {
+  const t0 = Date.now();
+  let res: Response;
+  try {
+    res = await fetch(`${c.baseUrl}/chat/completions`, {
+      method: "POST", headers: headers(c), signal: AbortSignal.timeout(timeoutMs),
+      body: JSON.stringify({ model: c.modelName, messages, response_format: { type: "json_object" } }),
+    });
+  } catch (e) {
+    const to = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
+    throw new CodedError(to ? "PROVIDER_TIMEOUT" : "PROVIDER_HTTP_ERROR", to ? `No response within ${timeoutMs / 1000}s.` : "Endpoint unreachable.");
+  }
+  if (!res.ok) {
+    const hint = res.status === 401 ? " Key rejected." : res.status === 402 ? " No credits left." : res.status === 404 ? " Model not found." : res.status === 429 ? " Rate limited; try again shortly." : "";
+    throw new CodedError("PROVIDER_HTTP_ERROR", `HTTP ${res.status}.${hint}`);
+  }
+  const json = (await res.json().catch(() => null)) as { choices?: { message?: { content?: string } }[] } | null;
+  const content = json?.choices?.[0]?.message?.content;
+  if (!content) throw new CodedError("INVALID_JSON", "Model returned no content.");
+  return { content, latencyMs: Date.now() - t0 };
+}
+
+const extractJson = (raw: string): unknown => { try { return JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1)); } catch { return null; } };
+
+export type ProbeState = "PASS" | "FAIL" | "NOT CHECKED";
 export type ModelStatus = {
   configured: boolean; reachable: boolean; modelName: string; maxParams: string; withinLimit: boolean;
   endpointHost: string | null; checkedAt: string; error: string | null; latencyMs: number | null;
+  providerLabel: string; openWeight: "PASS" | "FAIL" | "UNKNOWN"; fallback: boolean;
+  transport: ProbeState; chat: ProbeState; planner: ProbeState; eligible: boolean;
 };
 
-/** Real health check with timeout. Never reports reachable unless the endpoint answered. */
+const PROBE_SCHEMA = "districts(district_code, district_name)\nschools(school_id, school_name, district_code, school_status)\nenrolments(enrolment_id, school_id, student_id, academic_year, student_status, enrolment_count)\npayments(payment_id, school_id, academic_year, amount, payment_status)";
+
+/** Three separate probes: transport, chat completion, planner schema. "reachable" means the planner probe passed. */
 export const getModelStatus = createServerFn({ method: "GET" }).handler(async (): Promise<ModelStatus> => {
   const c = config();
   let host: string | null = null;
   try { host = c.baseUrl ? new URL(c.baseUrl).host : null; } catch { host = "invalid URL"; }
-  const base: ModelStatus = {
+  const s: ModelStatus = {
     configured: Boolean(c.baseUrl), reachable: false, modelName: c.modelName, maxParams: c.maxParams, withinLimit: c.withinLimit,
     endpointHost: host, checkedAt: new Date().toISOString(), error: null, latencyMs: null,
+    providerLabel: c.providerLabel, openWeight: c.openWeight, fallback: c.fallback,
+    transport: "NOT CHECKED", chat: "NOT CHECKED", planner: "NOT CHECKED", eligible: false,
   };
-  if (!c.baseUrl) return { ...base, error: "Model endpoint not connected (MODEL_BASE_URL is not set)." };
-  if (host === "invalid URL") return { ...base, error: "MODEL_BASE_URL is not a valid URL." };
-  if (!c.withinLimit) return { ...base, error: `MODEL_MAX_PARAMETERS=${c.maxParams} exceeds the 8B limit; live mode refused.` };
-  const t0 = Date.now();
+  if (!c.baseUrl) return { ...s, error: "Model endpoint not connected (MODEL_BASE_URL is not set)." };
+  if (host === "invalid URL") return { ...s, error: "MODEL_BASE_URL is not a valid URL." };
+  if (!c.gateway && !c.withinLimit) return { ...s, error: `MODEL_MAX_PARAMETERS=${c.maxParams} is unknown or exceeds 8B; live mode refused.` };
+  // (a) transport: any HTTP answer counts; the model list is optional.
   try {
-    const res = await fetch(`${c.baseUrl}/models`, { headers: authHeaders(c.apiKey), signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS) });
-    const latencyMs = Date.now() - t0;
-    if (!res.ok) return { ...base, latencyMs, error: `Endpoint responded HTTP ${res.status}.` };
-    // The endpoint answering is not enough: the configured model must be on its list.
-    try {
-      const body = (await res.json()) as { data?: { id?: string }[] };
-      const ids = (body.data ?? []).map((m) => (m.id ?? "").toLowerCase());
-      if (ids.length && !ids.includes(c.modelName.toLowerCase())) {
-        return { ...base, latencyMs, error: `Endpoint is reachable but does not offer model "${c.modelName}". Check MODEL_NAME.` };
-      }
-    } catch { /* non-JSON model list: fall through to reachable */ }
-    return { ...base, latencyMs, reachable: true };
-  } catch (e) {
-    const timedOut = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
-    return { ...base, error: timedOut ? `Endpoint did not respond within ${HEALTH_TIMEOUT_MS / 1000}s.` : "Endpoint unreachable (network error)." };
-  }
+    await fetch(`${c.baseUrl}/models`, { headers: headers(c), signal: AbortSignal.timeout(8000) });
+    s.transport = "PASS";
+  } catch { return { ...s, transport: "FAIL", error: "Transport probe failed: endpoint unreachable or timed out." }; }
+  // (b) chat completion
+  try {
+    const r = await chat(c, [{ role: "user", content: 'Reply with exactly this JSON object: {"ok":true}' }], PROBE_TIMEOUT_MS);
+    const o = extractJson(r.content) as { ok?: unknown } | null;
+    s.latencyMs = r.latencyMs;
+    if (o?.ok !== true) return { ...s, chat: "FAIL", error: "Chat probe: model did not return {\"ok\":true}." };
+    s.chat = "PASS";
+  } catch (e) { return { ...s, chat: "FAIL", error: `Chat probe failed — ${e instanceof Error ? e.message : "error"}` }; }
+  // (c) planner schema probe (no SQL executed)
+  try {
+    const p = buildPlannerPrompt({ question: "Sum completed payments by school", profile: "Synthetic education demo.", schema: PROBE_SCHEMA, definitions: [], candidates: {} });
+    const r = await chat(c, [{ role: "system", content: p.system }, { role: "user", content: p.user }], PLAN_TIMEOUT_MS);
+    const parsed = LivePlanSchema.safeParse(extractJson(r.content));
+    if (!parsed.success) return { ...s, planner: "FAIL", error: `Planner probe: PLAN_SCHEMA_INVALID (${parsed.error.issues.slice(0, 2).map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")})` };
+    s.planner = "PASS";
+  } catch (e) { return { ...s, planner: "FAIL", error: `Planner probe failed — ${e instanceof Error ? e.message : "error"}` }; }
+  return { ...s, reachable: true, eligible: true };
 });
 
 const AnalyzeInput = z.object({
@@ -70,49 +118,13 @@ const AnalyzeInput = z.object({
   candidates: z.record(z.string(), z.array(z.string().max(200)).max(50)),
 });
 
-function buildPrompt(d: z.infer<typeof AnalyzeInput>) {
-  return `You are a SQL planner for a read-only SQLite database. Return ONLY one JSON object, no prose, with keys:
-decision ("answer"|"clarify"|"abstain"|"blocked"), resolved_question (string), metric (string|null), grain (string|null), time_interpretation (string|null), tables (string[]), columns (string[]), joins (array), sql (string|null; one SELECT or WITH statement; use ? placeholders for user values), params (array of bound values), clarifications (string[]), assumptions (string[]), abstain_reason (string|null), recommended_fix (string|null).
-Rules: never write data; clarify undefined business terms or ambiguous values; abstain on forecasts, causation or fields that do not exist; aggregate each one-to-many table before joining; use only approved definitions; missing values are never zero; academic_year has mixed formats and must be normalized to YYYY-YY.
-Dataset profile: ${d.profile}
-Schema:
-${d.schema}
-Approved definitions:
-${d.definitions.map((x) => `- ${x.title} v${x.version}: ${x.meaning} | ${x.expression} | grain ${x.grain}`).join("\n") || "- none approved"}
-Value candidates:
-${Object.entries(d.candidates).map(([k, v]) => `- ${k}: ${v.join(", ")}`).join("\n")}
-Question: ${d.question}`;
-}
-
-/** analyze-question: sends the structured request to the configured model and returns its raw JSON text (validated again in the browser). */
+/** analyze-question: returns the model's raw JSON plan text; validated and compiled in the app, never executed directly. */
 export const analyzeQuestion = createServerFn({ method: "POST" })
   .inputValidator(AnalyzeInput)
   .handler(async ({ data }): Promise<{ content: string; latencyMs: number; modelName: string }> => {
     const c = config();
-    if (!c.baseUrl) throw new Error("Model endpoint not connected.");
-    if (!c.withinLimit) throw new Error("Configured model exceeds the 8B parameter limit.");
-    const t0 = Date.now();
-    let res: Response;
-    try {
-      res = await fetch(`${c.baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders(c.apiKey) },
-        body: JSON.stringify({ model: c.modelName, temperature: 0, messages: [{ role: "user", content: buildPrompt(data) }] }),
-        signal: AbortSignal.timeout(PLAN_TIMEOUT_MS),
-      });
-    } catch {
-      throw new Error(`Model endpoint did not respond within ${PLAN_TIMEOUT_MS / 1000}s or is unreachable.`);
-    }
-    if (!res.ok) {
-      const hint = res.status === 401 ? " The API key was rejected; check MODEL_API_KEY."
-        : res.status === 402 ? " The model account has no credits left."
-        : res.status === 404 ? " The model name was not found; check MODEL_NAME."
-        : res.status === 429 ? " The model host is rate limiting requests or the account is out of credits. Try again shortly."
-        : "";
-      throw new Error(`Model endpoint error HTTP ${res.status}.${hint}`);
-    }
-    const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-    const content = json.choices?.[0]?.message?.content;
-    if (!content) throw new Error("Model returned no content.");
-    return { content, latencyMs: Date.now() - t0, modelName: c.modelName };
+    if (!c.baseUrl) throw new CodedError("PROVIDER_HTTP_ERROR", "Model endpoint not connected.");
+    const p = buildPlannerPrompt(data);
+    const r = await chat(c, [{ role: "system", content: p.system }, { role: "user", content: p.user }], PLAN_TIMEOUT_MS);
+    return { ...r, modelName: c.modelName };
   });
