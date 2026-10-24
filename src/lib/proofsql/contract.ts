@@ -64,3 +64,9 @@ export const DRAFT_CONTRACT = (): Contract => {
 };
 
 export const allApproved = (c: Contract) => (Object.keys(c) as DefKey[]).every((k) => current(c, k).status === "APPROVED");
+
+/** Editing never mutates an earlier version: it appends a new DRAFT version. */
+export const withEdit = (c: Contract, k: DefKey, patch: Partial<DefVersion>): Contract => {
+  const cur = current(c, k);
+  return { ...c, [k]: [...c[k], { ...cur, ...patch, key: k, version: cur.version + 1, status: "DRAFT" as DefStatus, updatedAt: new Date().toISOString() }] };
+};
