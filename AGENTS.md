@@ -15,3 +15,4 @@
 - The model is called only through server functions in `src/lib/model.functions.ts` so the key stays server-side; never fall back silently to another model.
 - Core rules are covered by `src/lib/proofsql/proofsql.test.ts`; keep it passing.
 - Evaluation correctness compares normalized result rows (reference SQL is only a trace); summary metrics must be derived from the per-case rows so they can never contradict them.
+- Live mode uses the Lovable AI connection when LOVABLE_API_KEY is set, otherwise the MODEL_* endpoint; the UI always shows the actual model name.
