@@ -5,7 +5,6 @@ import { useApp } from "@/components/proofsql/AppProvider";
 import { Button } from "@/components/ui/button";
 import { CheckBadge } from "@/components/proofsql/badges";
 import { PrepareDemoButton, ReadinessList } from "@/components/proofsql/PrepareDemo";
-import { AccountControls } from "@/components/proofsql/AccountControls";
 import { processingStatus, withoutModelNames } from "@/lib/proofsql/presentation";
 
 export const Route = createFileRoute("/settings")({
@@ -42,7 +41,6 @@ function SettingsPage() {
         <PrepareDemoButton className="ml-auto" />
       </div>
       <ReadinessList />
-      <AccountControls />
       <p className="text-xs">Current status: <span className="font-medium">{processingStatus(mode, planner)}</span></p>
       {!liveReady && <p className="rounded border border-warning bg-warning-soft p-2 text-xs text-warning-foreground">Live inference is unavailable. Scripted · no live model inference. Only predefined demo and evaluation questions are supported.</p>}
       <section className="rounded-lg border border-border bg-card p-4">
