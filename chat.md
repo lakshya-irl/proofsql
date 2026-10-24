@@ -80,3 +80,9 @@ _Last updated: 2026-10-24_
 - Older runs are ignored by the current storage version, not necessarily deleted. Recovery depends on old browser storage or exported backups still being available; inspect before resetting or clearing anything.
 - Query cancellation remains unimplemented: synchronous browser SQLite needs an isolated Web Worker with termination and database reconstruction for a real execution deadline. The existing 8-second health and 45-second model-request limits do not limit SQL execution.
 - Files modified for this guidance task: chat.md only. No app behavior changed; model credentials, live verification, old-run recovery and query cancellation remain outstanding.
+
+## Update 2026-10-24 — where to obtain model connection values
+- User asked how to obtain the four live-model configuration values and reported `src/App.tsx(8,14)` / `onOpenChange` typed as `never`.
+- Checked: `src/App.tsx` does not exist here. The available build/runtime log files showed no reported error; this specific error remains unverified without the source and complete diagnostic.
+- Guidance: obtain the API base address, private key and exact served model ID from a host offering an eligible model; obtain parameter size from the model's official documentation. Verify support for both model-list and chat-completion endpoints before paying. Do not paste a private key into chat.
+- No provider selected or credential requested. Only chat.md changed; live configuration is still pending.
