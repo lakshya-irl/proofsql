@@ -1,7 +1,7 @@
 // Server-side provider adapter for OpenAI-compatible endpoints. The API key never reaches the browser.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { LivePlanSchema, buildPlannerPrompt } from "@/lib/proofsql/livePlan";
+import { LivePlanSchema, buildPlannerPrompt, compileLivePlan } from "@/lib/proofsql/livePlan";
 
 const DEFAULT_MODEL = "Qwen/Qwen2.5-Coder-7B-Instruct";
 const PROBE_TIMEOUT_MS = 15000;
@@ -67,7 +67,11 @@ export type ModelStatus = {
   endpointHost: string | null; checkedAt: string; error: string | null; latencyMs: number | null;
   providerLabel: string; openWeight: "PASS" | "FAIL" | "UNKNOWN"; fallback: boolean;
   transport: ProbeState; chat: ProbeState; planner: ProbeState; eligible: boolean;
+  configFingerprint: string;
 };
+
+/** Canonical planner probe: a question the compiler supports exactly. */
+export const PROBE_QUESTION = "Count schools by district.";
 
 const PROBE_SCHEMA = "districts(district_code, district_name)\nschools(school_id, school_name, district_code, school_status)\nenrolments(enrolment_id, school_id, student_id, academic_year, student_status, enrolment_count)\npayments(payment_id, school_id, academic_year, amount, payment_status)";
 
@@ -81,6 +85,8 @@ export const getModelStatus = createServerFn({ method: "GET" }).handler(async ()
     endpointHost: host, checkedAt: new Date().toISOString(), error: null, latencyMs: null,
     providerLabel: c.providerLabel, openWeight: c.openWeight, fallback: c.fallback,
     transport: "NOT CHECKED", chat: "NOT CHECKED", planner: "NOT CHECKED", eligible: false,
+    // Non-secret identity of the configuration; cached readiness is discarded when it changes.
+    configFingerprint: [c.providerLabel, host ?? "", c.modelName, c.maxParams, c.openWeight].join("|"),
   };
   if (!c.baseUrl) return { ...s, error: "Model endpoint not connected (MODEL_BASE_URL is not set)." };
   if (host === "invalid URL") return { ...s, error: "MODEL_BASE_URL is not a valid URL." };
@@ -100,10 +106,13 @@ export const getModelStatus = createServerFn({ method: "GET" }).handler(async ()
   } catch (e) { return { ...s, chat: "FAIL", error: `Chat probe failed — ${e instanceof Error ? e.message : "error"}` }; }
   // (c) planner schema probe (no SQL executed)
   try {
-    const p = buildPlannerPrompt({ question: "Sum completed payments by school", profile: "Synthetic education demo.", schema: PROBE_SCHEMA, definitions: [], candidates: {} });
+    const p = buildPlannerPrompt({ question: PROBE_QUESTION, profile: "Synthetic education demo.", schema: PROBE_SCHEMA, definitions: [], candidates: {} });
     const r = await chat(c, [{ role: "system", content: p.system }, { role: "user", content: p.user }], PLAN_TIMEOUT_MS);
     const parsed = LivePlanSchema.safeParse(extractJson(r.content));
     if (!parsed.success) return { ...s, planner: "FAIL", error: `Planner probe: PLAN_SCHEMA_INVALID (${parsed.error.issues.slice(0, 2).map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")})` };
+    const compiled = compileLivePlan(parsed.data, PROBE_QUESTION);
+    if (!compiled.ok) return { ...s, planner: "FAIL", error: `Planner probe: ${compiled.code} (${compiled.message})` };
+    if (compiled.sc.plan.decision !== "answer") return { ...s, planner: "FAIL", error: `Planner probe: UNSUPPORTED_PLAN (expected answer, got ${compiled.sc.plan.decision})` };
     s.planner = "PASS";
   } catch (e) { return { ...s, planner: "FAIL", error: `Planner probe failed — ${e instanceof Error ? e.message : "error"}` }; }
   return { ...s, reachable: true, eligible: true };
