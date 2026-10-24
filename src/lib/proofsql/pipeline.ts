@@ -41,6 +41,7 @@ export type RunResult = {
   limitations: string[]; summary: string; error: string | null;
   joinStatus: JoinStatus | null; liveInference: boolean; modelLatencyMs: number | null; latencyMs: number | null;
   errorCode?: ErrorCode | null; developerTrace?: string | null;
+  /** COVID only: structured question this run resolved to, used as the base for follow-ups. */ followUpQuestion?: import("./covid").CovidQuestion | null;
 };
 
 export const ROW_LIMIT = 200;
