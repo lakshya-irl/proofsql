@@ -26,7 +26,7 @@ export const Route = createFileRoute("/")({
 });
 
 function AskPage() {
-  const { ask, db, mode, livePlanner, modelStatusLabel, model } = useApp();
+  const { ask, db, mode, livePlanner, modelStatusLabel, planner, checking } = useApp();
   const [q, setQ] = useState("");
   const [run, setRun] = useState<RunResult | null>(null);
   const [busy, setBusy] = useState(false);
@@ -44,8 +44,8 @@ function AskPage() {
         <div className="flex flex-wrap items-center gap-2">
           <label htmlFor="q" className="text-base font-semibold">Ask a question about the demo database</label>
           <div className="ml-auto flex flex-wrap items-center gap-2">
-            <ModeBadge label={modelStatusLabel} live={mode === "live" && Boolean(livePlanner)} />
-            <span className="text-[11px] text-muted-foreground">Model: {model ? (model.eligible ? `planner verified (${model.modelName})` : model.transport === "PASS" ? "transport only — planner not verified" : "unavailable") : "checking…"}</span>
+            <ModeBadge label={modelStatusLabel} live={mode === "live" && planner.eligibleForLive} />
+            <span className="text-[11px] text-muted-foreground">Model: {checking && !planner.lastCheckedAt ? "checking…" : planner.eligibleForLive ? `planner verified (${planner.model})` : planner.transport === "pass" ? `transport only — planner not verified${planner.errorCode ? ` (${planner.errorCode})` : ""}` : "unavailable"}</span>
             <PrepareDemoButton size="sm" />
           </div>
         </div>
