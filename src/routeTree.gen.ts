@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ContractRouteImport } from './routes/contract'
+import { Route as CovidRouteImport } from './routes/covid'
 import { Route as DatasetsRouteImport } from './routes/datasets'
 import { Route as EvaluationRouteImport } from './routes/evaluation'
 import { Route as HealthRouteImport } from './routes/health'
@@ -26,6 +27,11 @@ const IndexRoute = IndexRouteImport.update({
 const ContractRoute = ContractRouteImport.update({
   id: '/contract',
   path: '/contract',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CovidRoute = CovidRouteImport.update({
+  id: '/covid',
+  path: '/covid',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DatasetsRoute = DatasetsRouteImport.update({
@@ -62,6 +68,7 @@ const RunsRunIdRoute = RunsRunIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/contract': typeof ContractRoute
+  '/covid': typeof CovidRoute
   '/datasets': typeof DatasetsRoute
   '/evaluation': typeof EvaluationRoute
   '/health': typeof HealthRoute
@@ -72,6 +79,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/contract': typeof ContractRoute
+  '/covid': typeof CovidRoute
   '/datasets': typeof DatasetsRoute
   '/evaluation': typeof EvaluationRoute
   '/health': typeof HealthRoute
@@ -83,6 +91,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/contract': typeof ContractRoute
+  '/covid': typeof CovidRoute
   '/datasets': typeof DatasetsRoute
   '/evaluation': typeof EvaluationRoute
   '/health': typeof HealthRoute
@@ -95,6 +104,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/contract'
+    | '/covid'
     | '/datasets'
     | '/evaluation'
     | '/health'
@@ -105,6 +115,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/contract'
+    | '/covid'
     | '/datasets'
     | '/evaluation'
     | '/health'
@@ -115,6 +126,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/contract'
+    | '/covid'
     | '/datasets'
     | '/evaluation'
     | '/health'
@@ -126,6 +138,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ContractRoute: typeof ContractRoute
+  CovidRoute: typeof CovidRoute
   DatasetsRoute: typeof DatasetsRoute
   EvaluationRoute: typeof EvaluationRoute
   HealthRoute: typeof HealthRoute
@@ -148,6 +161,13 @@ declare module '@tanstack/react-router' {
       path: '/contract'
       fullPath: '/contract'
       preLoaderRoute: typeof ContractRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/covid': {
+      id: '/covid'
+      path: '/covid'
+      fullPath: '/covid'
+      preLoaderRoute: typeof CovidRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/datasets': {
@@ -198,6 +218,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ContractRoute: ContractRoute,
+  CovidRoute: CovidRoute,
   DatasetsRoute: DatasetsRoute,
   EvaluationRoute: EvaluationRoute,
   HealthRoute: HealthRoute,
