@@ -122,8 +122,10 @@ export function ProofCard({ run, onAsk }: { run: RunResult; onAsk?: (question: s
         </Section>
       )}
       </details>
+      <details><summary className="cursor-pointer border-t border-border py-3 font-medium">How the figures were interpreted</summary>
       {run.assumptions.length > 0 && <Section title="Assumptions"><ul className="list-disc space-y-0.5 pl-4 text-xs">{run.assumptions.map((a) => <li key={a}>{a}</li>)}</ul></Section>}
       {run.normalizationRules.length > 0 && <Section title="Normalization rules"><ul className="list-disc space-y-0.5 pl-4 font-mono text-[11px]">{run.normalizationRules.map((a) => <li key={a}>{a}</li>)}</ul></Section>}
+      </details>
       {run.evidence.length > 0 && (
         <Section title="Evidence & data-quality warnings">
           <ul className="space-y-1.5">{run.evidence.map((e, i) => <li key={i} className="flex gap-2 text-xs"><CheckBadge state={e.state} /><span>{e.detail}</span></li>)}</ul>
@@ -140,9 +142,10 @@ export function ProofCard({ run, onAsk }: { run: RunResult; onAsk?: (question: s
         <Section title="Blocked reasons"><ul className="list-disc pl-4 text-xs text-destructive">{run.blockedReasons.map((b) => <li key={b}>{b}</li>)}</ul></Section>
       )}
       <div id={evidenceId} />
-      <Section title="Validation checks">
+      <details><summary className="cursor-pointer border-t border-border py-3 font-medium">Safety checks</summary><Section title="Validation checks">
         <ul className="space-y-1.5">{run.checks.map((c, i) => <li key={i} className="flex gap-2 text-xs"><CheckBadge state={c.state} /><span><span className="font-medium">{c.name}</span> — {c.detail}</span></li>)}</ul>
       </Section>
+      </details>
       {onAsk && <Section title="Follow-up questions"><div className="flex flex-col gap-2">{(run.suggestions.length ? run.suggestions : run.datasetName.includes("COVID") ? [
         { label: "Compare Brazil deaths: January → June 2021", question: "Change in deaths in Brazil from January 2021 to June 2021" },
         { label: "Top countries: June 2021", question: "Top 5 countries by confirmed cases in June 2021" },
