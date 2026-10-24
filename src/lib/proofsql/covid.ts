@@ -41,6 +41,5 @@ export function planCovid(q: CovidQuestion): CovidPlan {
       sql: `SELECT country, as_of_date, ${m} FROM covid_monthly WHERE month = ? AND ${m} IS NOT NULL ORDER BY ${m} DESC LIMIT ?` };
   }
   return { decision: "ANSWER", warnings: [...warnings, "Change = end-month total minus start-month total."], params: [q.from, q.to, q.country],
-    sql: `SELECT a.country, a.${m} AS start_value, b.${m} AS end_value, b.${m} - a.${m} AS change FROM covid_monthly a JOIN covid_monthly b ON b.country = a.country AND b.month = ? WHERE a.month = ? AND a.country = ? LIMIT 1`
-      .replace("b.month = ? WHERE a.month = ?", "a.month = ? AND b.month = ? WHERE 1=1") };
+    sql: `SELECT a.country, a.${m} AS start_value, b.${m} AS end_value, b.${m} - a.${m} AS change FROM covid_monthly a JOIN covid_monthly b ON b.country = a.country WHERE a.month = ? AND b.month = ? AND a.country = ? LIMIT 1` };
 }
