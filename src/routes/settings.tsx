@@ -64,13 +64,13 @@ function SettingsPage() {
       <section className="rounded-lg border border-border bg-card p-4">
         <h2 className="mb-3 font-semibold">Planner mode</h2>
         <div className="grid gap-2 sm:grid-cols-2">
-          <button onClick={() => setMode("scripted")} className={`rounded-lg border p-3 text-left ${mode === "scripted" ? "border-primary ring-1 ring-primary" : "border-border"}`}>
-            <div className="text-sm font-medium">Scripted demo</div>
-            <div className="text-xs text-muted-foreground">Scripted planner — no live model inference. Predefined questions only; anything else is refused, never faked. SQL still runs against the real demo database.</div>
-          </button>
           <button onClick={() => liveReady && setMode("live")} disabled={!liveReady} className={`rounded-lg border p-3 text-left disabled:cursor-not-allowed disabled:opacity-60 ${mode === "live" ? "border-primary ring-1 ring-primary" : "border-border"}`}>
-            <div className="text-sm font-medium">Live model</div>
-            <div className="text-xs text-muted-foreground">{liveReady ? "Arbitrary questions go to the configured open-weight model; every plan is schema-validated, firewalled and join-checked before execution." : "Unavailable: model endpoint not connected. Run a health check after configuring it."}</div>
+            <div className="text-sm font-medium">Live model (primary)</div>
+            <div className="text-xs text-muted-foreground">{liveReady ? `Any question goes to ${model?.modelName}; every plan is schema-validated, firewalled and join-checked before execution.` : "Unavailable: model endpoint not connected. Run a health check after configuring it."}</div>
+          </button>
+          <button onClick={() => setMode("scripted")} className={`rounded-lg border p-3 text-left ${mode === "scripted" ? "border-primary ring-1 ring-primary" : "border-border"}`}>
+            <div className="text-sm font-medium">Scripted demo (backup)</div>
+            <div className="text-xs text-muted-foreground">Scripted planner — no live model inference. Predefined questions only; anything else is refused, never faked. SQL still runs against the real demo database.</div>
           </button>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">Current: <span className="font-medium">{mode}</span>. The mode never switches automatically between live and scripted.</p>
